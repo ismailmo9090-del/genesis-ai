@@ -113,3 +113,60 @@ ALTER TABLE experiences ADD COLUMN duration REAL;
 def run_v2_migration(conn):
     """Apply migration v2: upgraded architecture tables."""
     conn.executescript(MIGRATION_V2_SQL)
+
+
+MIGRATION_V3_SQL = """
+-- API Keys table
+CREATE TABLE IF NOT EXISTS api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key_hash TEXT UNIQUE NOT NULL,
+    key_prefix TEXT NOT NULL,
+    name TEXT,
+    scopes TEXT DEFAULT '["chat"]',
+    requests_per_minute INTEGER DEFAULT 30,
+    requests_per_hour INTEGER DEFAULT 500,
+    is_active INTEGER DEFAULT 1,
+    created_at REAL,
+    last_used_at REAL
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
+
+-- API request logs
+CREATE TABLE IF NOT EXISTS api_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL,
+    api_key_prefix TEXT,
+    endpoint TEXT,
+    method TEXT,
+    status_code INTEGER,
+    latency_ms REAL,
+    conversation_id TEXT,
+    error_code TEXT,
+    created_at REAL
+);
+CREATE INDEX IF NOT EXISTS idx_api_logs_request ON api_logs(request_id);
+CREATE INDEX IF NOT EXISTS idx_api_logs_key ON api_logs(api_key_prefix);
+CREATE INDEX IF NOT EXISTS idx_api_logs_endpoint ON api_logs(endpoint);
+CREATE INDEX IF NOT EXISTS idx_api_logs_created ON api_logs(created_at);
+
+-- API conversations (persistent conversation tracking)
+CREATE TABLE IF NOT EXISTS api_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id TEXT UNIQUE NOT NULL,
+    api_key_prefix TEXT,
+    title TEXT,
+    created_at REAL,
+    updated_at REAL,
+    message_count INTEGER DEFAULT 0,
+    metadata TEXT DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_api_conv_id ON api_conversations(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_api_conv_key ON api_conversations(api_key_prefix);
+"""
+
+
+def run_v3_migration(conn):
+    """Apply migration v3: API infrastructure tables."""
+    conn.executescript(MIGRATION_V3_SQL)

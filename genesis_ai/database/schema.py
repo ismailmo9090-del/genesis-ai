@@ -383,6 +383,10 @@ def run_migrations(conn):
         from genesis_ai.database.migrations import run_v2_migration
         run_v2_migration(conn)
 
+    if current_version < 3:
+        from genesis_ai.database.migrations import run_v3_migration
+        run_v3_migration(conn)
+
     if current_version < SCHEMA_VERSION:
         set_schema_version(conn, SCHEMA_VERSION)
 

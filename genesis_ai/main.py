@@ -53,6 +53,10 @@ from genesis_ai.core.contradiction.engine import ContradictionEngine, Contradict
 from genesis_ai.core.critic.engine import CriticEngine, CritiqueResult
 from genesis_ai.core.experience.engine import ExperienceEngine, ExperienceRecord
 from genesis_ai.core.code.generator import CodeGenerator
+from genesis_ai.core.cognitive.engine import CognitiveEngine
+from genesis_ai.core.cognitive.state import CognitiveState, Complexity, GoalType
+from genesis_ai.learning.pipeline import LearningPipeline
+from genesis_ai.learning.experience_memory import ExperienceMemory
 from genesis_ai.core.events.engine import EventLog, Event
 from genesis_ai.core.research.memory.engine import ResearchMemory
 
@@ -121,6 +125,9 @@ class GenesisAI:
         self.event_log = EventLog(self.db)
         self.research_memory = ResearchMemory(self.db)
         self.code_generator = CodeGenerator()
+        self.cognitive_engine = CognitiveEngine(self.db)
+        self.learning_pipeline = LearningPipeline(self.db)
+        self.experience_memory = ExperienceMemory(self.db)
 
         self._conversation_context: dict[str, list] = {}
 
@@ -151,344 +158,93 @@ class GenesisAI:
 
     def chat(self, user_id: str, message: str) -> dict:
         """
-        Main chat method — Multi-stage reasoning pipeline.
+        Main chat method — Cognitive pipeline.
+
+        Builds a CognitiveState, runs it through the CognitiveEngine,
+        and returns the response. The old hardcoded routing is replaced
+        by dynamic decision-making.
         """
         session_id = f"{user_id}_{int(time.time())}"
         start_time = time.time()
-        response_text = ""
-        sources_used = []
-        knowledge_stored = False
-        msg_type = "FACTUAL"
-        confidence = 0.9
 
         try:
-            # ── Stage 1: UNDERSTAND ──
-            self.event_log.log_event("UNDERSTANDING_START", {"message": message[:200]}, session_id)
-            
-            # Check for follow-up context
+            # Build initial cognitive state
+            state = CognitiveState(
+                raw_input=message,
+                user_id=user_id,
+                session_id=session_id,
+                start_time=start_time,
+            )
+
+            # Get conversation context
             context_entity = self._get_last_entity(user_id)
-            resolved_message = message
             if context_entity:
-                resolved_message = self._resolve_followup(message, context_entity)
-            
-            understanding = self.understanding_engine.understand(resolved_message)
-            lang = self.conversation_engine._detect_language(message)
-            history = self._get_context(user_id)
-            context_entity = self._get_last_entity(user_id)
-            self.event_log.log_event(
-                "UNDERSTANDING_COMPLETE",
-                {"intent": understanding.intent, "complexity": understanding.complexity,
-                 "task_type": understanding.task_type, "domain": understanding.domain},
-                session_id, time.time() - start_time,
-            )
-
-            # Handle identity questions (no search needed)
-            if self._is_identity_question(message):
-                response_text = self._identity_response(lang)
-                msg_type = "IDENTITY"
-                confidence = 1.0
-                self.event_log.log_event("SOLUTION_CREATED", {"source": "identity_template"}, session_id)
-                self.event_log.log_event("ANSWER_READY", {"total_duration": time.time() - start_time}, session_id)
-                self._update_context(user_id, message, response_text, None)
-                self.memory_engine.store_memory(
-                    f"User: {message}", "SHORT_TERM",
-                    {"user_id": user_id, "intent": msg_type, "role": "user"},
+                state.previous_entity = context_entity
+                state.is_followup = bool(
+                    re.search(r'\b(ye|yeh|woh|vo|uska|iska|that|this|it|them)\b',
+                              message.lower())
                 )
-                self.memory_engine.store_memory(
-                    f"Assistant: {response_text[:300]}", "SHORT_TERM",
-                    {"user_id": user_id, "intent": msg_type, "role": "assistant"},
-                )
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                return {
-                    "response_text": response_text, "intent": msg_type,
-                    "confidence": confidence, "sources_used": [],
-                    "knowledge_stored": False, "skills_created": False,
-                    "processing_time_ms": elapsed_ms, "user_id": user_id,
-                    "pipeline_stages": self.event_log.get_stage_timings(session_id),
-                }
+            state.conversation_history = self._get_context(user_id)
 
-            # Handle greetings / casual (no search needed)
-            if understanding.task_type == "conversation":
-                response_text = get_casual_response(message, lang, history)
-                msg_type = "CASUAL"
-                confidence = 1.0
-                self.event_log.log_event("SOLUTION_CREATED", {"source": "casual_template"}, session_id)
-                self.event_log.log_event("ANSWER_READY", {"total_duration": time.time() - start_time}, session_id)
-                self._update_context(user_id, message, response_text, None)
-                self.memory_engine.store_memory(
-                    f"User: {message}", "SHORT_TERM",
-                    {"user_id": user_id, "intent": msg_type, "role": "user"},
-                )
-                self.memory_engine.store_memory(
-                    f"Assistant: {response_text[:300]}", "SHORT_TERM",
-                    {"user_id": user_id, "intent": msg_type, "role": "assistant"},
-                )
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                return {
-                    "response_text": response_text, "intent": msg_type,
-                    "confidence": confidence, "sources_used": [],
-                    "knowledge_stored": False, "skills_created": False,
-                    "processing_time_ms": elapsed_ms, "user_id": user_id,
-                    "pipeline_stages": self.event_log.get_stage_timings(session_id),
-                }
+            # Run the full cognitive pipeline
+            state = self.cognitive_engine.run_full_pipeline(state)
 
-            # Route to appropriate handler based on understanding
-            if understanding.intent == "identity" or self._is_identity_question(message):
-                response_text = self._identity_response(lang)
-                msg_type = "IDENTITY"
-                confidence = 1.0
-            elif understanding.task_type == "casual":
-                response_text = get_casual_response(message, lang, history)
-                msg_type = "CASUAL"
-            elif understanding.task_type == "code" or understanding.domain == "programming":
-                response_text, sources_used, knowledge_stored = self._handle_code(user_id, resolved_message, lang)
-                msg_type = "CODE"
-            elif understanding.intent == "explain":
-                response_text, sources_used, knowledge_stored = self._handle_factual(user_id, resolved_message, lang)
-                msg_type = "FACTUAL"
-            elif context_entity and self._resolve_followup(message, context_entity) != message:
-                response_text, sources_used, knowledge_stored = self._handle_followup(user_id, resolved_message, lang, context_entity)
-                msg_type = "FOLLOWUP"
-            else:
-                response_text, sources_used, knowledge_stored = self._handle_factual(user_id, resolved_message, lang)
-                msg_type = "FACTUAL"
-
-            # ── Search Gate: skip research pipeline for non-research tasks ──
-            skip_research = (
-                understanding.task_type in ("conversation", "casual")
-                or understanding.intent == "identity"
-                or understanding.task_type == "code"
-            )
-
-            # ── Stage 2: ANALYZE (skip for conversation/code/identity) ──
-            t = time.time()
-            analysis = None
-            plan = None
-            if not skip_research:
-                self.event_log.log_event("ANALYSIS_START", {}, session_id)
-                analysis = self.analysis_engine.analyze(understanding)
-                self.event_log.log_event(
-                    "ANALYSIS_COMPLETE",
-                    {"components": len(analysis.components), "complexity_score": analysis.complexity_score,
-                     "recommended_approach": analysis.recommended_approach},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 3: PLAN ──
-                t = time.time()
-                plan_steps = []
-                if understanding.research_needed:
-                    gap_analysis_tmp = self.gap_detector.detect_gaps(analysis)
-                    plan_steps = [f"Research {g.topic}" for g in gap_analysis_tmp.gaps]
-                plan_steps.append("Generate solution")
-                plan = self.planning_engine.create_plan(
-                    goal=understanding.raw_message,
-                    context={"understanding": understanding.intent, "analysis": analysis.complexity_score, "steps": plan_steps},
-                )
-                self.event_log.log_event(
-                    "PLAN_CREATED",
-                    {"steps": len(plan.get("steps", plan_steps)) if isinstance(plan, dict) else len(plan_steps)},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 4: CHECK LOCAL MEMORY ──
-                t = time.time()
-                local_knowledge = self.knowledge_retrieval.retrieve(message, {"topic": understanding.domain})
-                self.event_log.log_event(
-                    "MEMORY_SEARCH",
-                    {"results": len(local_knowledge) if local_knowledge else 0},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 5: IDENTIFY KNOWLEDGE GAPS ──
-                t = time.time()
-                gap_analysis = self.gap_detector.detect_gaps(analysis)
-                self.event_log.log_event(
-                    "KNOWLEDGE_GAP_FOUND",
-                    {"gaps": gap_analysis.total_gaps, "can_answer_locally": gap_analysis.can_answer_locally},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 6-7: RESEARCH + EVIDENCE ──
-                all_evidence = []
-                if gap_analysis.gaps and understanding.research_needed:
-                    for gap in gap_analysis.gaps:
-                        for query in gap.search_queries[:3]:
-                            t = time.time()
-                            cached = self.research_memory.get_cached_research(query)
-                            if cached and self.research_memory.is_fresh(query):
-                                results = cached.results
-                            else:
-                                results = self.web_search.search(query, max_results=3)
-                                if results:
-                                    serializable = [{"title": r.title, "snippet": r.snippet, "url": r.url, "source_name": r.source_name} for r in results]
-                                    self.research_memory.store_research(
-                                        query, serializable,
-                                        [{"name": r.source_name, "url": r.url} for r in results],
-                                    )
-                            self.event_log.log_event(
-                                "SOURCE_FOUND",
-                                {"query": query, "results": len(results) if results else 0},
-                                session_id, time.time() - t,
-                            )
-                            if results:
-                                for r in results:
-                                    snippet = r.snippet if hasattr(r, 'snippet') else r.get('snippet', '')
-                                    source_name = r.source_name if hasattr(r, 'source_name') else r.get('source_name', '')
-                                    url = r.url if hasattr(r, 'url') else r.get('url', '')
-                                    title = r.title if hasattr(r, 'title') else r.get('title', '')
-                                    if snippet:
-                                        all_evidence.append({
-                                            "claim": snippet,
-                                            "source": source_name,
-                                            "url": url,
-                                            "title": title,
-                                            "topic": gap.topic,
-                                        })
-                                self.event_log.log_event(
-                                    "EVIDENCE_EXTRACTED",
-                                    {"evidence_count": len(all_evidence)},
-                                    session_id,
-                                )
-
-                # ── Stage 8: COMPARE SOURCES ──
-                t = time.time()
-                comparison = None
-                if len(all_evidence) > 1:
-                    comparison = self.comparison_engine.compare(all_evidence)
-                self.event_log.log_event(
-                    "COMPARISON_COMPLETE",
-                    {"approaches": len(comparison.approaches) if comparison else 0,
-                     "best_approach": comparison.best_approach if comparison else "none"},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 9: CHECK CONTRADICTIONS ──
-                t = time.time()
-                contradictions = None
-                if len(all_evidence) > 1:
-                    claims = [{"text": e["claim"], "source_name": e.get("source", "")} for e in all_evidence]
-                    contradictions = self.contradiction_engine.detect(claims)
-                self.event_log.log_event(
-                    "CONTRADICTION_FOUND",
-                    {"contradictions": contradictions.contradictions_found if contradictions else 0},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 10: REASON ──
-                t = time.time()
-                reasoning_result = None
-                if understanding.complexity != "simple":
-                    reasoning_result = self.reasoning_engine.reason(
-                        understanding.raw_message,
-                        context={"constraints": understanding.constraints},
-                    )
-                self.event_log.log_event("REASONING_COMPLETE", {}, session_id, time.time() - t)
-
-            else:
-                # For conversation/code/identity — skip analysis pipeline
-                local_knowledge = []
-                all_evidence = []
-                comparison = None
-                contradictions = None
-
-            # ── Stage 11: GENERATE ANSWER (only if not already set by routing) ──
-            t = time.time()
-            if not response_text:
-                response_text = self._generate_answer(understanding, all_evidence, comparison, local_knowledge, lang)
-            self.event_log.log_event(
-                "SOLUTION_CREATED", {"response_length": len(response_text)},
-                session_id, time.time() - t,
-            )
-
-            # ── Stage 12-15: SKIP for conversation/code/identity ──
-            if not skip_research:
-                # ── Stage 12: SELF-CRITIQUE ──
-                t = time.time()
-                critique = self.critic_engine.critique(
-                    answer=response_text,
-                    question=understanding.raw_message,
-                    research=[{"text": e["claim"], "source_name": e.get("source", ""), "url": e.get("url", "")} for e in all_evidence],
-                    understanding={"intent": understanding.intent, "requirements": understanding.constraints},
-                    contradictions=[{"severity": c.severity, "resolution": c.resolution} for c in (contradictions.contradictions if contradictions else [])],
-                )
-                self.event_log.log_event(
-                    "SELF_CRITIQUE", {"score": critique.score, "issues": len(critique.issues)},
-                    session_id, time.time() - t,
-                )
-
-                # ── Stage 13: VERIFY ──
-                t = time.time()
-                source_dicts = [{"source_name": e.get("source", ""), "url": e.get("url", ""), "snippet": e.get("claim", "")} for e in all_evidence[:5]]
-                if source_dicts:
-                    self.verification_engine.verify_claim(understanding.raw_message, source_dicts)
-                self.event_log.log_event("VERIFICATION_COMPLETE", {}, session_id, time.time() - t)
-
-                # ── Stage 14: LEARN ──
-                t = time.time()
-                self.learning_engine.learn_from_research({
-                    "findings": [{"claim": e["claim"][:200], "confidence": 0.7, "source": e.get("source", "web")} for e in all_evidence[:5]],
-                    "sources": [{"name": e.get("source", ""), "url": e.get("url", "")} for e in all_evidence[:5]],
-                    "confidence": 0.7,
-                })
-                self.event_log.log_event("LEARNING_COMPLETE", {}, session_id, time.time() - t)
-
-                # ── Stage 15: STORE EXPERIENCE ──
-                t = time.time()
-                experience = ExperienceRecord(
-                    task_id=session_id,
-                    task_description=message,
-                    approach=comparison.best_approach if comparison else "direct_answer",
-                    knowledge_used=[k.get("claim", "")[:100] for k in (local_knowledge or [])],
-                    research_used=[e.get("source", "") for e in all_evidence[:5]],
-                    errors=[],
-                    solution_summary=response_text[:200],
-                    result="success",
-                    lessons=[],
-                    duration=time.time() - start_time,
-                    timestamp=time.time(),
-                )
-                self.experience_engine.create_experience(experience)
-                self.event_log.log_event("EXPERIENCE_STORED", {}, session_id, time.time() - t)
-
-            # ── Update context and memory ──
+            # Update context for future follow-ups
             entity = self._extract_entity_from_message(message)
-            self._update_context(user_id, message, response_text, entity)
-            self.memory_engine.store_memory(
-                f"User: {message}", "SHORT_TERM",
-                {"user_id": user_id, "intent": msg_type, "role": "user"},
-            )
-            self.memory_engine.store_memory(
-                f"Assistant: {response_text[:300]}", "SHORT_TERM",
-                {"user_id": user_id, "intent": msg_type, "role": "assistant"},
+            self._update_context(user_id, message, state.response_text, entity)
+
+            # Log events for backward compatibility with UI
+            valid_stages = {
+                "PERCEIVE": "USER_INPUT",
+                "UNDERSTAND": "UNDERSTANDING_COMPLETE",
+                "ASSESS_KNOWLEDGE": "MEMORY_SEARCH",
+                "DECIDE": "PLAN_CREATED",
+                "ACT": "SOLUTION_CREATED",
+                "VERIFY": "VERIFICATION_COMPLETE",
+                "LEARN": "LEARNING_COMPLETE",
+            }
+            for stage in state.stages_completed:
+                mapped = valid_stages.get(stage)
+                if mapped:
+                    self.event_log.log_event(mapped, {}, session_id)
+            self.event_log.log_event(
+                "ANSWER_READY",
+                {"total_duration": state.total_duration},
+                session_id,
             )
 
-            knowledge_stored = True
-            self.event_log.log_event("ANSWER_READY", {"total_duration": time.time() - start_time}, session_id)
+            return {
+                "response_text": state.response_text,
+                "intent": state.msg_type,
+                "confidence": state.confidence_score,
+                "sources_used": state.sources_used,
+                "knowledge_stored": state.knowledge_updated,
+                "skills_created": bool(state.skills_created),
+                "processing_time_ms": int(state.total_duration * 1000),
+                "user_id": user_id,
+                "pipeline_stages": self.event_log.get_stage_timings(session_id),
+            }
 
         except Exception as e:
             logger.error("Error in chat: %s", e, exc_info=True)
             err_lang = self.conversation_engine._detect_language(message)
-            response_text = {
+            error_msgs = {
                 'hindi': "माफ़ कीजिए, एक error आई। कृपया दोबारा try करें।",
                 'hinglish': "Sorry yaar, kuch gadbad ho gayi. Dobara try karo!",
                 'english': "I encountered an error. Please try again.",
-            }.get(err_lang, "Error occurred. Please try again.")
-            msg_type = "ERROR"
-
-        elapsed_ms = int((time.time() - start_time) * 1000)
-
-        return {
-            "response_text": response_text,
-            "intent": msg_type,
-            "confidence": confidence,
-            "sources_used": sources_used,
-            "knowledge_stored": knowledge_stored,
-            "skills_created": False,
-            "processing_time_ms": elapsed_ms,
-            "user_id": user_id,
-            "pipeline_stages": self.event_log.get_stage_timings(session_id),
-        }
+            }
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            return {
+                "response_text": error_msgs.get(err_lang, error_msgs["english"]),
+                "intent": "ERROR",
+                "confidence": 0.0,
+                "sources_used": [],
+                "knowledge_stored": False,
+                "skills_created": False,
+                "processing_time_ms": elapsed_ms,
+                "user_id": user_id,
+                "pipeline_stages": {},
+            }
 
     def _resolve_followup(self, message: str, context_entity: str) -> str:
         """Resolve follow-up references using structural patterns, not exact word lists."""

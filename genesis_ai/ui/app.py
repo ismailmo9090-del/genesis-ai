@@ -17,6 +17,20 @@ genesis: GenesisAI = None
 def create_app(genesis_instance: GenesisAI) -> Flask:
     global genesis
     genesis = genesis_instance
+
+    # Initialize Learning API
+    from genesis_ai.learning.api import init_learning_api
+    init_learning_api(
+        app,
+        genesis.db,
+        genesis.learning_pipeline,
+        genesis.experience_memory,
+    )
+
+    # Initialize Inference API (Production /v1 endpoints)
+    from genesis_ai.api.inference import init_inference_api
+    init_inference_api(app, genesis, genesis.db)
+
     return app
 
 
@@ -27,6 +41,7 @@ def index():
 
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
+    """UI chat endpoint — routes through the same Genesis core as /v1/chat."""
     data = request.get_json(force=True)
     message = data.get("message", "")
     user_id = data.get("user_id", "web_user")

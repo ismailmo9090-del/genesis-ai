@@ -61,3 +61,9 @@ BACKUP_ENABLED = os.environ.get("GENESIS_BACKUP_ENABLED", "true").lower() in (
 BACKUP_INTERVAL_HOURS = int(os.environ.get("GENESIS_BACKUP_INTERVAL", "24"))
 
 DATA_DIR = os.environ.get("GENESIS_DATA_DIR", "genesis_data")
+
+# ── API Settings ──────────────────────────────────────────────────────
+API_DEFAULT_RPM = int(os.environ.get("GENESIS_API_RPM", "30"))
+API_DEFAULT_RPH = int(os.environ.get("GENESIS_API_RPH", "500"))
+API_MAX_REQUEST_SIZE = int(os.environ.get("GENESIS_API_MAX_REQUEST", "10000"))
+API_STREAM_CHUNK_SIZE = int(os.environ.get("GENESIS_API_CHUNK_SIZE", "80"))
