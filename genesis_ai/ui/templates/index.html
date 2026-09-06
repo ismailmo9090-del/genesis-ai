@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genesis AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg-primary:#0d1117;--bg-secondary:#161b22;--bg-tertiary:#21262d;--bg-card:#1c2128;--border:#30363d;--text-primary:#e6edf3;--text-secondary:#8b949e;--text-muted:#484f58;--accent:#58a6ff;--accent2:#1f6feb;--accent3:#e94560;--success:#3fb950;--warning:#d29922;--danger:#f85149;--purple:#bc8cff}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:40px;background:var(--bg-secondary);border-bottom:1px solid var(--border);flex-shrink:0}
+.top-bar .logo{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:1px}
+.top-bar .tagline{font-size:11px;color:var(--text-muted);font-style:italic}
+.top-bar .status-area{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-secondary)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.status-dot.online{background:var(--success);box-shadow:0 0 6px var(--success)}
+.status-dot.offline{background:var(--danger)}
+.status-dot.learning{background:var(--warning);animation:pulse 1.5s infinite}
+.status-dot.researching{background:var(--purple);animation:pulse 1.5s infinite}
+.status-dot.thinking{background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.main-container{display:flex;flex:1;overflow:hidden}
+.sidebar{width:220px;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:16px;border-bottom:1px solid var(--border)}
+.sidebar-header h2{font-size:16px;font-weight:600;color:var(--text-primary)}
+.sidebar-header p{font-size:11px;color:var(--text-muted);margin-top:4px}
+.nav-items{flex:1;padding:8px 0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;font-size:13px;color:var(--text-secondary);transition:all .15s;border-left:3px solid transparent}
+.nav-item:hover{background:var(--bg-tertiary);color:var(--text-primary)}
+.nav-item.active{background:var(--bg-tertiary);color:var(--accent);border-left-color:var(--accent)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+.sidebar-footer{padding:12px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted)}
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.section{display:none;flex:1;flex-direction:column;overflow:hidden}
+.section.active{display:flex}
+
+/* Chat */
+.chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.chat-input-area{padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:10px;background:var(--bg-secondary)}
+.chat-input{flex:1;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text-primary);font-size:13px;outline:none;resize:none;font-family:inherit}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{background:var(--accent2);border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-weight:600;transition:background .15s}
+.chat-send:hover{background:var(--accent)}
+.msg{max-width:80%;padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.5;white-space:pre-wrap}
+.msg.user{align-self:flex-end;background:var(--accent2);color:#fff;border-bottom-right-radius:4px}
+.msg.assistant{align-self:flex-start;background:var(--bg-card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-meta{font-size:10px;color:var(--text-muted);margin-top:4px}
+.typing{display:none;align-self:flex-start;padding:8px 16px;color:var(--text-muted);font-size:12px;font-style:italic}
+.typing.show{display:flex;align-items:center;gap:6px}
+.typing-dots span{display:inline-block;width:5px;height:5px;background:var(--text-muted);border-radius:50%;animation:dot 1.4s infinite;margin:0 1px}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+
+/* Dashboard cards */
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;padding:24px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center}
+.stat-card .value{font-size:28px;font-weight:700;color:var(--accent)}
+.stat-card .label{font-size:11px;color:var(--text-secondary);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+.section-header{padding:20px 24px 0;font-size:18px;font-weight:600;color:var(--text-primary)}
+.section-sub{padding:4px 24px 16px;font-size:12px;color:var(--text-muted)}
+
+/* Memory, Knowledge, Skills, Learning lists */
+.data-list{flex:1;overflow-y:auto;padding:0 24px 24px}
+.list-item{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:8px;font-size:13px;line-height:1.5}
+.list-item .title{font-weight:600;color:var(--text-primary);margin-bottom:4px}
+.list-item .meta{font-size:11px;color:var(--text-muted)}
+.skill-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.skill-card .name{font-weight:600;font-size:14px}
+.skill-card .rate{font-size:20px;font-weight:700}
+.skill-card .rate.high{color:var(--success)}
+.skill-card .rate.mid{color:var(--warning)}
+.skill-card .rate.low{color:var(--danger)}
+.skill-bar{height:4px;background:var(--bg-tertiary);border-radius:2px;margin-top:8px;overflow:hidden}
+.skill-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+
+.timeline-item{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+.timeline-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0}
+.timeline-content .topic{font-weight:600;font-size:13px}
+.timeline-content .info{font-size:11px;color:var(--text-muted);margin-top:2px}
+
+/* Settings */
+.settings-group{padding:24px}
+.settings-group h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)}
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
+.setting-row .setting-label{font-size:13px;color:var(--text-secondary)}
+.setting-row .setting-value{font-size:13px;color:var(--text-primary)}
+.toggle{position:relative;width:40px;height:22px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--bg-tertiary);border-radius:11px;transition:.2s;border:1px solid var(--border)}
+.toggle .slider:before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:var(--text-muted);top:2px;left:2px;transition:.2s}
+.toggle input:checked+.slider{background:var(--accent2);border-color:var(--accent)}
+.toggle input:checked+.slider:before{transform:translateX(18px);background:#fff}
+
+/* Research */
+.research-area{padding:24px}
+.research-input{display:flex;gap:10px;margin-bottom:16px}
+.research-input input{flex:1;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text-primary);font-size:13px;outline:none}
+.research-input input:focus{border-color:var(--accent)}
+.research-input button{background:var(--purple);border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:13px;cursor:pointer;font-weight:600}
+.research-results{flex:1;overflow-y:auto}
+.finding-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px}
+.finding-card .claim{font-size:13px;line-height:1.5}
+.finding-card .confidence{font-size:11px;margin-top:6px}
+
+/* Status bar */
+.status-bar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:28px;background:var(--bg-secondary);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);flex-shrink:0}
+.status-bar .left,.status-bar .right{display:flex;align-items:center;gap:16px}
+.status-bar .stat{display:flex;align-items:center;gap:4px}
+
+.pipeline-panel{background:#1a1a2e;border:1px solid #333;border-radius:8px;margin:10px 0;overflow:hidden}
+.pipeline-header{padding:10px 15px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#16213e;color:#00d4ff;font-weight:bold}
+.pipeline-content{padding:10px 15px;max-height:300px;overflow-y:auto}
+.pipeline-stage{display:flex;align-items:center;padding:6px 0;color:#ccc;font-size:13px}
+.pipeline-stage .stage-icon{width:20px;margin-right:8px;text-align:center}
+.pipeline-stage .stage-name{flex:1}
+.pipeline-stage .stage-time{color:#888;font-size:11px}
+.pipeline-stage.completed .stage-icon{color:#00ff88}
+.pipeline-stage.active .stage-icon{color:#ffaa00}
+
+@media(max-width:768px){.sidebar{width:56px}.sidebar-header,.nav-item span,.sidebar-footer{display:none}.nav-item{justify-content:center;padding:10px}.nav-item svg{margin:0}.dashboard-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">GENESIS AI</div>
+  <div class="tagline">Learn by Experience, Not by Retraining.</div>
+  <div class="status-area">
+    <span id="status-indicator"><span class="status-dot offline"></span> Offline</span>
+  </div>
+</div>
+
+<div class="main-container">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Dashboard</h2>
+      <p>System Overview</p>
+    </div>
+    <div class="nav-items">
+      <div class="nav-item active" data-section="chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>Chat</span>
+      </div>
+      <div class="nav-item" data-section="memory">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4v4l3 3"/></svg>
+        <span>Memory</span>
+      </div>
+      <div class="nav-item" data-section="knowledge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 000 20 14.5 14.5 0 000-20M2 12h20"/></svg>
+        <span>Knowledge</span>
+      </div>
+      <div class="nav-item" data-section="skills">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span>Skills</span>
+      </div>
+      <div class="nav-item" data-section="learning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>Learning</span>
+      </div>
+      <div class="nav-item" data-section="research">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Research</span>
+      </div>
+      <div class="nav-item" data-section="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span>Settings</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">v0.1.0 — Genesis AI</div>
+  </div>
+
+  <div class="content">
+    <!-- Chat -->
+    <div class="section active" id="section-chat">
+      <div class="chat-messages" id="chat-messages"></div>
+      <div id="pipelinePanel" class="pipeline-panel" style="display:none;">
+        <div class="pipeline-header" onclick="togglePipeline()">
+          <span>&#x1F9E0; Thinking Process</span>
+          <span id="pipelineToggle">&#x25BC;</span>
+        </div>
+        <div id="pipelineContent" class="pipeline-content"></div>
+      </div>
+      <div class="typing" id="typing-indicator">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        Thinking...
+      </div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="chat-input" rows="1" placeholder="Ask Genesis AI anything..."></textarea>
+        <button class="chat-send" id="chat-send">Send</button>
+      </div>
+    </div>
+
+    <!-- Memory -->
+    <div class="section" id="section-memory">
+      <div class="section-header">Memory</div>
+      <div class="section-sub">Short-term and long-term memory stores</div>
+      <div class="dashboard-grid" id="memory-stats"></div>
+      <div class="section-header" style="margin-top:8px">Recent Memories</div>
+      <div class="data-list" id="memory-list"></div>
+    </div>
+
+    <!-- Knowledge -->
+    <div class="section" id="section-knowledge">
+      <div class="section-header">Knowledge Graph</div>
+      <div class="section-sub">Concepts, claims, and relationships</div>
+      <div class="dashboard-grid" id="knowledge-stats"></div>
+      <div class="section-header" style="margin-top:8px">Knowledge Graph</div>
+      <div class="data-list" id="knowledge-graph"></div>
+    </div>
+
+    <!-- Skills -->
+    <div class="section" id="section-skills">
+      <div class="section-header">Skills</div>
+      <div class="section-sub">Procedural knowledge and capabilities</div>
+      <div class="dashboard-grid" id="skill-stats"></div>
+      <div class="data-list" id="skill-list"></div>
+    </div>
+
+    <!-- Learning -->
+    <div class="section" id="section-learning">
+      <div class="section-header">Learning</div>
+      <div class="section-sub">What Genesis has learned over time</div>
+      <div class="dashboard-grid" id="learning-stats"></div>
+      <div class="section-header" style="margin-top:8px">Timeline</div>
+      <div class="data-list" id="learning-timeline"></div>
+    </div>
+
+    <!-- Research -->
+    <div class="section" id="section-research">
+      <div class="section-header">Research</div>
+      <div class="section-sub">Search the web and learn new information</div>
+      <div class="research-area">
+        <div class="research-input">
+          <input type="text" id="research-query" placeholder="Enter a research query...">
+          <button id="research-btn">Research</button>
+        </div>
+        <div class="research-results" id="research-results"></div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="section" id="section-settings">
+      <div class="section-header">Settings</div>
+      <div class="section-sub">Privacy controls and system configuration</div>
+      <div class="settings-group">
+        <h3>Privacy</h3>
+        <div id="privacy-settings"></div>
+      </div>
+      <div class="settings-group">
+        <h3>System Status</h3>
+        <div id="system-settings"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="left">
+    <span class="stat"><span class="status-dot offline" id="bar-dot"></span> <span id="bar-status">Offline</span></span>
+  </div>
+  <div class="right">
+    <span class="stat" id="bar-memory">Memory: 0</span>
+    <span class="stat" id="bar-knowledge">Knowledge: 0</span>
+    <span class="stat" id="bar-concepts">Concepts: 0</span>
+    <span class="stat" id="bar-skills">Skills: 0</span>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+let currentSection = 'chat';
+
+function togglePipeline() {
+  const content = document.getElementById('pipelineContent');
+  const toggle = document.getElementById('pipelineToggle');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    toggle.innerHTML = '&#x25B2;';
+  } else {
+    content.style.display = 'none';
+    toggle.innerHTML = '&#x25BC;';
+  }
+}
+
+function displayPipeline(stages) {
+  const panel = document.getElementById('pipelinePanel');
+  const content = document.getElementById('pipelineContent');
+  if (!stages || Object.keys(stages).length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  content.innerHTML = '';
+  const stageOrder = [
+    'UNDERSTANDING', 'ANALYSIS', 'PLANNING', 'MEMORY_SEARCH',
+    'KNOWLEDGE_GAP', 'RESEARCH', 'EVIDENCE', 'COMPARISON',
+    'CONTRADICTION', 'REASONING', 'SOLUTION', 'SELF_CRITIQUE',
+    'VERIFICATION', 'LEARNING', 'EXPERIENCE'
+  ];
+  const stageIcons = {
+    'UNDERSTANDING': '\u{1F50D}', 'ANALYSIS': '\u{1F52C}', 'PLANNING': '\u{1F4CB}',
+    'MEMORY_SEARCH': '\u{1F4BE}', 'KNOWLEDGE_GAP': '\u{2753}', 'RESEARCH': '\u{1F310}',
+    'EVIDENCE': '\u{1F4CE}', 'COMPARISON': '\u{2696}', 'CONTRADICTION': '\u{26A0}',
+    'REASONING': '\u{1F9E0}', 'SOLUTION': '\u{1F4A1}', 'SELF_CRITIQUE': '\u{1F50E}',
+    'VERIFICATION': '\u{2705}', 'LEARNING': '\u{1F4DA}', 'EXPERIENCE': '\u{1F4DD}'
+  };
+  for (const stage of stageOrder) {
+    if (stages[stage]) {
+      const div = document.createElement('div');
+      div.className = 'pipeline-stage completed';
+      div.innerHTML = '<span class="stage-icon">' + (stageIcons[stage] || '\u{2022}') + '</span><span class="stage-name">' + stage.replace(/_/g, ' ').toLowerCase() + '</span><span class="stage-time">' + (stages[stage] * 1000).toFixed(0) + 'ms</span>';
+      content.appendChild(div);
+    }
+  }
+}
+
+// Nav
+$$('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const sec = item.dataset.section;
+    if (sec === currentSection) return;
+    $$('.nav-item').forEach(n => n.classList.remove('active'));
+    item.classList.add('active');
+    $$('.section').forEach(s => s.classList.remove('active'));
+    $(`#section-${sec}`).classList.add('active');
+    currentSection = sec;
+    if (sec !== 'chat') loadSection(sec);
+  });
+});
+
+function setStatus(status) {
+  const dot = $('#status-indicator');
+  const barDot = $('#bar-dot');
+  const barStatus = $('#bar-status');
+  const s = status || 'offline';
+  const label = s.charAt(0).toUpperCase() + s.slice(1);
+  dot.innerHTML = `<span class="status-dot ${s}"></span> ${label}`;
+  barDot.className = `status-dot ${s}`;
+  barStatus.textContent = label;
+}
+
+function updateBarStats(data) {
+  $('#bar-memory').textContent = `Memory: ${data.memory_count || 0}`;
+  $('#bar-knowledge').textContent = `Knowledge: ${data.knowledge_count || 0}`;
+  $('#bar-concepts').textContent = `Concepts: ${data.concept_count || 0}`;
+  $('#bar-skills').textContent = `Skills: ${data.skill_count || 0}`;
+}
+
+// Chat
+const chatMessages = $('#chat-messages');
+const chatInput = $('#chat-input');
+const chatSend = $('#chat-send');
+const typingIndicator = $('#typing-indicator');
+
+function addMessage(text, role, meta) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  if (meta) {
+    const m = document.createElement('div');
+    m.className = 'msg-meta';
+    m.textContent = meta;
+    div.appendChild(m);
+  }
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function sendMessage() {
+  const msg = chatInput.value.trim();
+  if (!msg) return;
+  addMessage(msg, 'user');
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+  typingIndicator.classList.add('show');
+  setStatus('thinking');
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: msg, user_id: 'web_user'})
+    });
+    const data = await res.json();
+    typingIndicator.classList.remove('show');
+    setStatus('online');
+    const meta = `Intent: ${data.intent} | ${data.processing_time_ms}ms`;
+    addMessage(data.response_text, 'assistant', meta);
+    if (data.pipeline_stages) {
+      displayPipeline(data.pipeline_stages);
+    }
+  } catch(e) {
+    typingIndicator.classList.remove('show');
+    setStatus('offline');
+    addMessage('Error connecting to Genesis AI.', 'assistant');
+  }
+}
+
+chatSend.addEventListener('click', sendMessage);
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+});
+
+// Section loaders
+async function loadSection(sec) {
+  try {
+    if (sec === 'memory') {
+      const res = await fetch('/api/memory');
+      const data = await res.json();
+      renderMemoryStats(data.stats);
+      renderMemoryList(data.recent_memories);
+    } else if (sec === 'knowledge') {
+      const res = await fetch('/api/knowledge');
+      const data = await res.json();
+      renderKnowledgeStats(data.stats);
+      renderKnowledgeGraph(data.graph);
+    } else if (sec === 'skills') {
+      const res = await fetch('/api/skills');
+      const data = await res.json();
+      renderSkillStats(data.stats);
+      renderSkillList(data.skills);
+    } else if (sec === 'learning') {
+      const res = await fetch('/api/learning');
+      const data = await res.json();
+      renderLearningStats(data.stats);
+      renderTimeline(data.timeline);
+    } else if (sec === 'settings') {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      renderSettings(data);
+    }
+  } catch(e) {
+    console.error('Failed to load', sec, e);
+  }
+}
+
+function renderStats(containerId, items) {
+  const c = $(containerId);
+  c.innerHTML = items.map(i => `
+    <div class="stat-card">
+      <div class="value">${i.value}</div>
+      <div class="label">${i.label}</div>
+    </div>
+  `).join('');
+}
+
+function renderMemoryStats(s) {
+  renderStats('#memory-stats', [
+    {value: s.total_memories || 0, label: 'Total Memories'},
+    {value: s.short_term_count || 0, label: 'Short Term'},
+    {value: s.long_term_count || 0, label: 'Long Term'},
+  ]);
+}
+
+function renderMemoryList(memories) {
+  const c = $('#memory-list');
+  if (!memories || !memories.length) { c.innerHTML = '<div class="list-item"><div class="title">No memories yet</div></div>'; return; }
+  c.innerHTML = memories.map(m => `
+    <div class="list-item">
+      <div class="title">${esc(m.content || '')}</div>
+      <div class="meta">${m.memory_type || 'unknown'} — ${m.created_at || ''}</div>
+    </div>
+  `).join('');
+}
+
+function renderKnowledgeStats(s) {
+  renderStats('#knowledge-stats', [
+    {value: s.total_concepts || 0, label: 'Concepts'},
+    {value: s.total_knowledge || 0, label: 'Knowledge Claims'},
+    {value: s.verified_knowledge || 0, label: 'Verified'},
+    {value: s.disputed_knowledge || 0, label: 'Disputed'},
+    {value: s.total_relationships || 0, label: 'Relationships'},
+  ]);
+}
+
+function renderKnowledgeGraph(graph) {
+  const c = $('#knowledge-graph');
+  if (!graph || !graph.length) { c.innerHTML = '<div class="list-item"><div class="title">No knowledge yet</div></div>'; return; }
+  c.innerHTML = graph.map(g => `
+    <div class="list-item">
+      <div class="title">${esc(g.concept)}</div>
+      <div class="meta">${g.knowledge_count} knowledge items</div>
+    </div>
+  `).join('');
+}
+
+function renderSkillStats(s) {
+  renderStats('#skill-stats', [
+    {value: s.total_skills || 0, label: 'Total Skills'},
+    {value: s.avg_success_rate ? (s.avg_success_rate * 100).toFixed(0) + '%' : 'N/A', label: 'Avg Success Rate'},
+  ]);
+}
+
+function renderSkillList(skills) {
+  const c = $('#skill-list');
+  if (!skills || !skills.length) { c.innerHTML = '<div class="list-item"><div class="title">No skills learned yet</div></div>'; return; }
+  c.innerHTML = skills.map(s => {
+    const rate = s.success_rate || 0;
+    const pct = (rate * 100).toFixed(0);
+    const cls = rate >= 0.7 ? 'high' : rate >= 0.4 ? 'mid' : 'low';
+    const color = rate >= 0.7 ? 'var(--success)' : rate >= 0.4 ? 'var(--warning)' : 'var(--danger)';
+    return `
+      <div class="skill-card">
+        <div>
+          <div class="name">${esc(s.name || s.skill_type || 'Unknown')}</div>
+          <div class="meta">${s.usage_count || 0} uses</div>
+          <div class="skill-bar"><div class="skill-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        </div>
+        <div class="rate ${cls}">${pct}%</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLearningStats(s) {
+  renderStats('#learning-stats', [
+    {value: s.knowledge_claims || 0, label: 'Knowledge Claims'},
+    {value: s.verified_knowledge || 0, label: 'Verified'},
+    {value: s.learning_sessions || 0, label: 'Sessions'},
+    {value: s.sources_analyzed || 0, label: 'Sources Analyzed'},
+  ]);
+}
+
+function renderTimeline(timeline) {
+  const c = $('#learning-timeline');
+  if (!timeline || !timeline.length) { c.innerHTML = '<div class="list-item"><div class="title">No learning sessions yet</div></div>'; return; }
+  c.innerHTML = timeline.map(t => `
+    <div class="timeline-item">
+      <div class="timeline-dot" style="background:${t.status === 'completed' ? 'var(--success)' : 'var(--accent)'}"></div>
+      <div class="timeline-content">
+        <div class="topic">${esc(t.topic || 'Unknown')}</div>
+        <div class="info">${t.type || 'general'} — ${t.status || 'active'} — ${t.started_at || ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSettings(data) {
+  const p = data.privacy || {};
+  const ps = $('#privacy-settings');
+  ps.innerHTML = `
+    <div class="setting-row">
+      <span class="setting-label">Web Search Enabled</span>
+      <label class="toggle"><input type="checkbox" ${p.web_search_enabled !== false ? 'checked' : ''}><span class="slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Data Collection</span>
+      <label class="toggle"><input type="checkbox" ${p.data_collection !== false ? 'checked' : ''}><span class="slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">Privacy Level</span>
+      <span class="setting-value">${p.privacy_level || 'standard'}</span>
+    </div>
+  `;
+  const s = data.status || {};
+  const ss = $('#system-settings');
+  ss.innerHTML = `
+    <div class="setting-row"><span class="setting-label">Status</span><span class="setting-value">${s.status || 'unknown'}</span></div>
+    <div class="setting-row"><span class="setting-label">Memory Entries</span><span class="setting-value">${s.memory_count || 0}</span></div>
+    <div class="setting-row"><span class="setting-label">Knowledge Claims</span><span class="setting-value">${s.knowledge_count || 0}</span></div>
+    <div class="setting-row"><span class="setting-label">Skills</span><span class="setting-value">${s.skill_count || 0}</span></div>
+  `;
+}
+
+// Research
+$('#research-btn').addEventListener('click', doResearch);
+$('#research-query').addEventListener('keydown', e => { if (e.key === 'Enter') doResearch(); });
+
+async function doResearch() {
+  const q = $('#research-query').value.trim();
+  if (!q) return;
+  const c = $('#research-results');
+  c.innerHTML = '<div class="list-item"><div class="title">Researching...</div></div>';
+  setStatus('researching');
+  try {
+    const res = await fetch(`/api/research/${encodeURIComponent(q)}`);
+    const data = await res.json();
+    setStatus('online');
+    let html = '';
+    if (data.findings && data.findings.length) {
+      html = data.findings.map(f => `
+        <div class="finding-card">
+          <div class="claim">${esc(f.claim)}</div>
+          <div class="confidence">Confidence: ${(f.confidence * 100).toFixed(0)}% — Source: ${esc(f.source || 'unknown')}</div>
+        </div>
+      `).join('');
+    } else {
+      html = '<div class="list-item"><div class="title">No findings for this query.</div></div>';
+    }
+    if (data.verification) {
+      html += `<div class="list-item"><div class="meta">Verification confidence: ${(data.verification.confidence * 100).toFixed(0)}% — ${data.verification.status || ''}</div></div>`;
+    }
+    c.innerHTML = html;
+  } catch(e) {
+    setStatus('offline');
+    c.innerHTML = '<div class="list-item"><div class="title">Research failed. Try again.</div></div>';
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Init
+async function init() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    setStatus(data.status);
+    updateBarStats(data);
+  } catch(e) { setStatus('offline'); }
+}
+init();
+</script>
+</body>
+</html>
