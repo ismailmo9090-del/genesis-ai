@@ -138,13 +138,11 @@ class WebSearchEngine:
         self._request_times: deque[float] = deque()
         self._session = requests.Session()
         self._session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
         })
 
     def _prune_old_requests(self):
@@ -185,7 +183,8 @@ class WebSearchEngine:
             if instant:
                 return instant[:max_results]
 
-        for attempt in range(2):
+        # Try lite endpoint with retry and delay
+        for attempt in range(3):
             try:
                 resp = self._session.post(
                     self.DDG_URL,
@@ -197,13 +196,33 @@ class WebSearchEngine:
                     results = self._parse_lite_results(resp.text)
                     if results:
                         return results[:max_results]
+                if resp.status_code == 403:
+                    # Rate limited — wait and retry with longer delay
+                    time.sleep(2 + attempt * 3)
+                    continue
                 if resp.status_code == 202:
                     time.sleep(2)
                     continue
                 break
             except Exception as e:
                 logger.error("Search attempt %d failed: %s", attempt + 1, e)
-                time.sleep(1)
+                time.sleep(1 + attempt * 2)
+
+        # Fallback: try HTML endpoint
+        try:
+            resp = self._session.get(
+                f"https://html.duckduckgo.com/html/",
+                params={"q": query},
+                timeout=15,
+            )
+            self._record_request()
+            if resp.status_code == 200 and "result__a" in resp.text:
+                results = self._parse_html_results(resp.text)
+                if results:
+                    return results[:max_results]
+        except Exception as e:
+            logger.error("HTML search failed: %s", e)
+
         return []
 
     def _instant_answer(self, query: str) -> list[SearchResult]:

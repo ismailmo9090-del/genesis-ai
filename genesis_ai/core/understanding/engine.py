@@ -112,7 +112,19 @@ _TASK_TYPE_PATTERNS = {
     ),
     "creative": re.compile(
         r'\b(write a story|poem|creative|imagine|fiction|narrative|'
-        r'kahani|kavita|story|creative writing)\b',
+        r'kahani|kavita|story|creative writing|'
+        r'metaphor|monologue|prose|lyrics|verse|stanza|sonnet|haiku|ode|limerick|'
+        r'ballad|fable|parable|allegory|myth|legend|satire|parody|'
+        r'rap|comedy|humor|joke|riddle|caption|tagline|slogan|'
+        r'shazish|ghazal|shayari|kavita|kahani|'
+        r'dialogue|script|screenplay|'
+        r'rhyme|chant|anthem|jingle|'
+        r'tale|saga|chronicle|'
+        r'portrait|sketch|painting|illustration|'
+        r'tribute|elegy|lament|'
+        r'epic|ballad|ode|psalm|'
+        r'create a|write a|compose|draft|pen|craft|'
+        r'banao|likho|sunao|karo)\b',
         re.IGNORECASE,
     ),
     "analysis": re.compile(

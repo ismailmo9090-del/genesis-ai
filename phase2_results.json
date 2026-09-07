@@ -1,0 +1,150 @@
+{
+  "baseline": {
+    "status": "online",
+    "memory_count": 100,
+    "knowledge_count": 0,
+    "concept_count": 8,
+    "skill_count": 0,
+    "curiosity_queue": {
+      "enabled": true,
+      "pending": 0,
+      "processed": 0,
+      "failed": 0,
+      "learning_sessions_today": 0,
+      "max_sessions_per_day": 10,
+      "web_requests_this_hour": 0,
+      "max_web_requests_per_hour": 200
+    }
+  },
+  "final": {
+    "status": "online",
+    "memory_count": 100,
+    "knowledge_count": 0,
+    "concept_count": 8,
+    "skill_count": 0,
+    "curiosity_queue": {
+      "enabled": true,
+      "pending": 0,
+      "processed": 0,
+      "failed": 0,
+      "learning_sessions_today": 0,
+      "max_sessions_per_day": 10,
+      "web_requests_this_hour": 0,
+      "max_web_requests_per_hour": 200
+    }
+  },
+  "results": [
+    {
+      "cycle": 1,
+      "domain": "science_basics",
+      "scores": [
+        4,
+        4,
+        5,
+        2
+      ],
+      "avg_score": 3.75
+    },
+    {
+      "cycle": 2,
+      "domain": "everyday_howto",
+      "scores": [
+        4,
+        2,
+        2,
+        2
+      ],
+      "avg_score": 2.5
+    },
+    {
+      "cycle": 3,
+      "domain": "comparisons",
+      "scores": [
+        2,
+        3,
+        2,
+        2
+      ],
+      "avg_score": 2.25
+    },
+    {
+      "cycle": 4,
+      "domain": "health_basics",
+      "scores": [
+        4,
+        2,
+        2,
+        2
+      ],
+      "avg_score": 2.5
+    },
+    {
+      "cycle": 5,
+      "domain": "technology",
+      "scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "avg_score": 2.0
+    },
+    {
+      "cycle": 6,
+      "domain": "cooking",
+      "scores": [
+        4,
+        2,
+        2,
+        4
+      ],
+      "avg_score": 3.0
+    },
+    {
+      "cycle": 7,
+      "domain": "nature_environment",
+      "scores": [
+        2,
+        2,
+        4,
+        2
+      ],
+      "avg_score": 2.5
+    },
+    {
+      "cycle": 8,
+      "domain": "space_astronomy",
+      "scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "avg_score": 2.0
+    },
+    {
+      "cycle": 9,
+      "domain": "history_culture",
+      "scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "avg_score": 2.0
+    },
+    {
+      "cycle": 10,
+      "domain": "math_concepts",
+      "scores": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "avg_score": 2.0
+    }
+  ],
+  "overall_avg": 2.45,
+  "total_queries": 40
+}

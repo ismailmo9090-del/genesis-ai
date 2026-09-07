@@ -16,7 +16,7 @@ class IntentEngine:
         self.greeting_patterns = [
             r"\b(hello|hi|hey|hii|heyy|helo|hii+|namaste|namaskar|ram ram|radhe radhe)\b",
             r"\b(good\s*(morning|afternoon|evening|night))\b",
-            r"\b(kaise\s*ho|kya\s*haal|kaise\s*ho\s*aap)\b",
+            r"\b(kaise\s*ho|kya\s*haal|kaise\s*ho\s*aap|kaise\s*hain|kaise\s*hain\s*aap)\b",
             r"\b(sup|yo|howdy|how\s*are\s*you)\b",
         ]
         self.task_patterns = [
@@ -122,6 +122,23 @@ class IntentEngine:
         scores["CASUAL"] = self._score_patterns(message_lower, self.casual_patterns)
         if "?" in message and scores["QUESTION"] < 0.3:
             scores["QUESTION"] += 0.3
+
+        # ── "kaise" disambiguation (grammatical, not topic-specific) ──
+        # "kaise ho/hain" = greeting (being-verb, referring to listener's state)
+        # "kaise hota/banta/chalta hai" = informational (process-verb, how X works)
+        if "kaise" in message_lower:
+            _GREETING_VERBS = r'(ho|hain|h|ho\s+aap|hain\s+aap)\s*[!.?\s]*$'
+            _PROCESS_VERBS = r'(hota|hoti|banta|banti|banate|banati|chalta|chalti|karta|karti|banaya|banaye|kiya|kiye|hoga|hua|hui|kaam|reh|rahe|rahi|sak|sake|pad|pade|ja|jaye|aa|aaye|de|diye|le|liye)'
+            is_greeting_kaise = bool(re.search(_GREETING_VERBS, message_lower))
+            is_process_kaise = bool(re.search(_PROCESS_VERBS, message_lower))
+            if is_greeting_kaise and not is_process_kaise:
+                # Boost greeting, suppress question
+                scores["GREETING"] = max(scores["GREETING"], 0.6)
+                scores["QUESTION"] = max(0.0, scores["QUESTION"] - 0.3)
+            elif is_process_kaise:
+                # Boost question, suppress greeting
+                scores["QUESTION"] = max(scores["QUESTION"], 0.5)
+                scores["GREETING"] = max(0.0, scores["GREETING"] - 0.3)
         entities = self._extract_entities(message_lower)
         if entities.get("programming_language") or entities.get("tool") or entities.get("file_type"):
             if scores["TASK_REQUEST"] < 0.5:

@@ -175,11 +175,21 @@ class DecisionOrchestrator:
             # Penalize respond if we haven't verified
             if not state.response_evaluated and state.complexity != Complexity.TRIVIAL:
                 score -= 0.1
+            # Creative tasks should RESPOND (generate), not search
+            if state.goal_type == GoalType.CREATIVE:
+                score += 0.5
+            # Code tasks should RESPOND (generate), not search
+            if state.goal_type == GoalType.CODE:
+                score += 0.3
 
         elif action == DecisionAction.RECALL:
-            # Prefer recall when local knowledge might exist
+            # Prefer recall when local knowledge or learned knowledge might exist
             if state.local_knowledge:
                 score += 0.3
+            if state.learned_knowledge:
+                score += 0.3  # Learned knowledge is as good as local knowledge
+            if state.learned_skills:
+                score += 0.2
             if state.relevant_memories:
                 score += 0.2
             if state.relevant_experiences:
@@ -194,6 +204,12 @@ class DecisionOrchestrator:
             # Don't search for trivial things
             if state.complexity == Complexity.TRIVIAL:
                 score -= 0.5
+            # Creative tasks should generate, not search
+            if state.goal_type == GoalType.CREATIVE:
+                score -= 0.5
+            # Code tasks should generate, not search
+            if state.goal_type == GoalType.CODE:
+                score -= 0.5  # strong penalty — code should always generate locally
 
         elif action == DecisionAction.DEEP_RESEARCH:
             # Prefer deep research for complex research tasks

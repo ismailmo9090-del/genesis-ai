@@ -170,3 +170,47 @@ CREATE INDEX IF NOT EXISTS idx_api_conv_key ON api_conversations(api_key_prefix)
 def run_v3_migration(conn):
     """Apply migration v3: API infrastructure tables."""
     conn.executescript(MIGRATION_V3_SQL)
+
+
+MIGRATION_V4_SQL = """
+-- Learned intent patterns (Learning → Inference Bridge)
+CREATE TABLE IF NOT EXISTS learned_intent_patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern_text TEXT NOT NULL,
+    intent TEXT NOT NULL,
+    concept TEXT DEFAULT '',
+    conditions TEXT DEFAULT '[]',
+    positive_examples TEXT DEFAULT '[]',
+    negative_examples TEXT DEFAULT '[]',
+    confidence REAL DEFAULT 0.5,
+    status TEXT DEFAULT 'ACTIVE',
+    source TEXT DEFAULT 'experience',
+    created_at REAL NOT NULL,
+    last_used REAL,
+    use_count INTEGER DEFAULT 0,
+    success_rate REAL DEFAULT 0.0
+);
+CREATE INDEX IF NOT EXISTS idx_lip_intent ON learned_intent_patterns(intent);
+CREATE INDEX IF NOT EXISTS idx_lip_status ON learned_intent_patterns(status);
+CREATE INDEX IF NOT EXISTS idx_lip_confidence ON learned_intent_patterns(confidence);
+
+-- Intent inference outcomes (feedback loop)
+CREATE TABLE IF NOT EXISTS intent_inference_outcomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    classified_intent TEXT NOT NULL,
+    learned_intent TEXT,
+    final_intent TEXT NOT NULL,
+    response_text TEXT,
+    outcome TEXT DEFAULT 'pending',
+    user_feedback TEXT,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_iio_session ON intent_inference_outcomes(session_id);
+"""
+
+
+def run_v4_migration(conn):
+    """Apply migration v4: Learning → Inference Bridge tables."""
+    conn.executescript(MIGRATION_V4_SQL)

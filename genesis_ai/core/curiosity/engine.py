@@ -1,5 +1,6 @@
 """Curiosity engine for identifying knowledge gaps and autonomous learning."""
 
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -187,17 +188,52 @@ class CuriosityEngine:
         pending = self.db.list_curiosity(status="pending", limit=limit)
         topics = []
         for item in pending:
+            topic = item["topic"]
             topics.append(
                 LearningTopic(
-                    topic=item["topic"],
+                    topic=topic,
                     priority=item["priority"],
                     reason=item.get("reason", ""),
                     queue_id=item["id"],
                 )
             )
+            # Research the topic and store results
+            self._research_and_store(topic)
             self.db.process_curiosity(item["id"])
             self._learning_sessions_today += 1
         return topics
+
+    def _research_and_store(self, topic: str):
+        """Research a topic via WebResearchEngine and store results as knowledge."""
+        try:
+            from genesis_ai.research.web.engine import WebResearchEngine
+            engine = WebResearchEngine(db=self.db)
+            result = engine.research(
+                question=f"what is {topic}",
+                knowledge_gap=topic,
+                user_goal="learn",
+                freshness="stable",
+                verification_level="basic",
+            )
+            if result.success and result.verified_knowledge:
+                for vk in result.verified_knowledge[:3]:
+                    self.db.execute(
+                        """INSERT INTO learned_knowledge
+                           (concept, claim, source, evidence, confidence,
+                            created_at, status)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            vk.concept or topic,
+                            vk.claim,
+                            "curiosity_research",
+                            json.dumps(vk.evidence[:2] if vk.evidence else []),
+                            vk.confidence,
+                            time.time(),
+                            vk.status or "PROBABLE",
+                        ),
+                    )
+        except Exception:
+            pass  # research is best-effort
 
     def get_queue_status(self) -> dict:
         with self.db.get_conn() as conn:

@@ -1,6 +1,6 @@
 """SQLite schema definitions and migrations for Genesis AI."""
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS users (
@@ -386,6 +386,10 @@ def run_migrations(conn):
     if current_version < 3:
         from genesis_ai.database.migrations import run_v3_migration
         run_v3_migration(conn)
+
+    if current_version < 4:
+        from genesis_ai.database.migrations import run_v4_migration
+        run_v4_migration(conn)
 
     if current_version < SCHEMA_VERSION:
         set_schema_version(conn, SCHEMA_VERSION)

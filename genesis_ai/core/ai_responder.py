@@ -248,22 +248,19 @@ def _synthesize_generic_creative(query, snippets: list, titles: list, urls: list
 
 
 def _clean_snippet_meta(text: str) -> str:
-    """Remove site promotional sentences and website noise."""
-    noise_keywords = [
-        '1shayari', 'hindishayari', 'shayariin', 'website', 'site', 'collection',
-        'hd images', 'download', 'copy and paste', 'share with', 'click here',
-        'read more', 'welcome to', 'curated for', 'offering readers', 'facebook',
-        'whatsapp status', 'instagram', 'best collection', 'in hindi with',
-        'copyright', 'all rights reserved', 'subscribe',
-        'पढ़िए', 'पढ़िए', 'पढ़िये', 'पढ़ें', 'पढ़ें', 'read', 'explore', 'check out'
-    ]
+    """Remove site promotional sentences and website noise using quality scoring."""
+    from genesis_ai.utils.quality import quality_score
     sentences = re.split(r'(?<=[.!?।\n])\s+', text)
     valid_sentences = []
     for s in sentences:
         s_clean = s.strip()
         if not s_clean:
             continue
-        if any(kw in s_clean.lower() for kw in noise_keywords) or s_clean.startswith('http') or 'www.' in s_clean.lower():
+        # Skip URLs
+        if s_clean.startswith('http') or 'www.' in s_clean.lower():
+            continue
+        # Use generic quality scorer — replaces hardcoded domain keyword list
+        if quality_score(s_clean) < 0.3:
             continue
         valid_sentences.append(s_clean)
 
@@ -537,16 +534,43 @@ def get_casual_response(message: str, lang: str, context_history: list) -> str:
 
 # ─── Helper Utilities ─────────────────────────────────────────────────────────
 
+def _has_encoding_failure(text: str) -> bool:
+    """Detect Unicode decode failure artifacts (3+ consecutive ? marks)."""
+    return bool(re.search(r'\?{3,}', text))
+
+
+def _has_hashtag_spam(text: str) -> bool:
+    """Detect excessive hashtag usage (3+ hashtags = likely spam/social media)."""
+    hashtags = re.findall(r'#\w+', text)
+    return len(hashtags) >= 3
+
+
+def _has_self_promotion(text: str) -> bool:
+    """Detect self-promotional / engagement-bait text."""
+    promo_patterns = [
+        r'\b(subscribe\s+(to\s+)?(my|our|the)\s+channel)\b',
+        r'\b(don\'?t\s+miss)\b',
+        r'\b(like\s+and\s+share)\b',
+        r'\b(follow\s+me)\b',
+        r'\b(check\s+out\s+my)\b',
+        r'\b(my\s+channel)\b',
+        r'\b(please\s+subscribe)\b',
+        r'\b(like\s+share\s+subscribe)\b',
+    ]
+    text_lower = text.lower()
+    return any(re.search(p, text_lower) for p in promo_patterns)
+
+
 def _extract_clean_snippets(results: list) -> tuple:
     """Extract and clean snippets from search results."""
     snippets, titles, urls = [], [], []
+    # Keep only minimal universal junk patterns (metadata, not content)
     junk_patterns = [
         r'\b\d+(\.\d+)?[KkMm]?\s+(subscribers|views|likes|followers|posts)\b',
         r'#\w+',
         r'\b\d+\s+years?\s+ago\b',
-        r'\b(piackutató|társaság|cégünkről|ország|legrégebbi)\b',
-        r'\b(link exchange|web ring|webmasters register|hyperlink on another web resource)\b',
     ]
+    from genesis_ai.utils.quality import quality_score
     for r in results:
         if not r.snippet:
             continue
@@ -556,13 +580,33 @@ def _extract_clean_snippets(results: list) -> tuple:
                           ("&nbsp;", " "), ("&#x20;", " "), ("\u200b", "")]:
             clean = clean.replace(old, new)
         clean = re.sub(r'\[.*?\]', '', clean)
+
+        # Pre-filter: reject encoding failures BEFORE quality scoring
+        if _has_encoding_failure(clean):
+            continue
+
+        # Pre-filter: reject hashtag spam
+        if _has_hashtag_spam(clean):
+            continue
+
+        # Pre-filter: reject self-promotional content
+        if _has_self_promotion(clean):
+            continue
+
         for pat in junk_patterns:
             clean = re.sub(pat, '', clean, flags=re.IGNORECASE)
         clean = re.sub(r'\s+', ' ', clean).strip()
-        if len(clean) > 30:
-            snippets.append(clean)
-            titles.append(r.title or "")
-            urls.append(r.url or "")
+
+        # Minimum length after cleaning
+        if len(clean) < 30:
+            continue
+
+        # Use generic quality scorer instead of hardcoded checks
+        if quality_score(clean) < 0.3:
+            continue
+        snippets.append(clean)
+        titles.append(r.title or "")
+        urls.append(r.url or "")
     return snippets, titles, urls
 
 

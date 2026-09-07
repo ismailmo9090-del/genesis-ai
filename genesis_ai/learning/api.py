@@ -117,6 +117,28 @@ def ingest_experience():
     # Ingest into memory
     exp_id = _experience_memory.ingest(experience)
 
+    # DIRECT KNOWLEDGE STORAGE: If teaching contains a claim, store it immediately
+    result_data = data.get("result", {})
+    if isinstance(result_data, dict) and result_data.get("claim"):
+        concept = result_data.get("concept", "")
+        if not concept:
+            # Extract from task
+            concept = data.get("task", "general")[:100]
+        _db.execute(
+            """INSERT INTO learned_knowledge
+               (concept, claim, source, evidence, confidence, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                concept,
+                result_data["claim"],
+                "teaching",
+                json.dumps(data.get("evidence", [])),
+                result_data.get("confidence", 0.8),
+                time.time(),
+                "VERIFIED",
+            ),
+        )
+
     # Process through learning pipeline
     learning_result = _learning_pipeline.process_experience(experience)
 
@@ -286,6 +308,73 @@ def submit_skill():
         ),
     )
     return jsonify({"skill_id": skill_id, "status": "skill_created"}), 201
+
+
+@learning_bp.route("/intent-pattern", methods=["POST"])
+@require_pipeline
+def submit_intent_pattern():
+    """Submit a learned intent pattern for the Learning → Inference Bridge.
+
+    This allows teaching Genesis to recognize new intents or override
+    existing classification.
+
+    Expected JSON:
+    {
+        "pattern_text": "salaam alaikum",
+        "intent": "greeting",
+        "concept": "greeting",
+        "conditions": ["hinglish", "arabic_greeting"],
+        "positive_examples": ["salaam", "assalamu alaikum", "waleikum assalam"],
+        "negative_examples": ["what is salaam"],
+        "confidence": 0.8
+    }
+    """
+    data = request.get_json()
+    if not data or "pattern_text" not in data or "intent" not in data:
+        return jsonify({"error": "Missing required fields: pattern_text, intent"}), 400
+
+    _db.execute(
+        """INSERT INTO learned_intent_patterns
+           (pattern_text, intent, concept, conditions, positive_examples,
+            negative_examples, confidence, status, source, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'teaching', ?)""",
+        (
+            data["pattern_text"],
+            data["intent"],
+            data.get("concept", data["intent"]),
+            json.dumps(data.get("conditions", [])),
+            json.dumps(data.get("positive_examples", [])),
+            json.dumps(data.get("negative_examples", [])),
+            data.get("confidence", 0.5),
+            time.time(),
+        ),
+    )
+    return jsonify({"status": "intent_pattern_submitted"}), 201
+
+
+@learning_bp.route("/intent-patterns", methods=["GET"])
+@require_pipeline
+def get_intent_patterns():
+    """Get all learned intent patterns."""
+    rows = _db.fetch_all(
+        """SELECT id, pattern_text, intent, concept, confidence, status, use_count
+           FROM learned_intent_patterns
+           ORDER BY confidence DESC"""
+    )
+    return jsonify({
+        "patterns": [
+            {
+                "id": r[0],
+                "pattern_text": r[1],
+                "intent": r[2],
+                "concept": r[3],
+                "confidence": r[4],
+                "status": r[5],
+                "use_count": r[6],
+            }
+            for r in rows
+        ]
+    })
 
 
 @learning_bp.route("/reflection", methods=["POST"])
@@ -783,3 +872,122 @@ def trigger_decay():
 def get_evolution_stats():
     """Get knowledge evolution statistics."""
     return jsonify(_evolution.get_evolution_stats())
+
+
+@learning_bp.route("/retrieval/stats", methods=["GET"])
+@require_pipeline
+def get_retrieval_stats():
+    """Get Learning → Inference Bridge retrieval statistics."""
+    from genesis_ai.core.learning.retrieval import LearningRetrieval
+    lr = LearningRetrieval(_db)
+    return jsonify(lr.get_retrieval_stats())
+
+
+@learning_bp.route("/inference/outcomes", methods=["GET"])
+@require_pipeline
+def get_inference_outcomes():
+    """Get recent inference outcomes for the feedback loop."""
+    limit = request.args.get("limit", 20, type=int)
+    rows = _db.fetch_all(
+        """SELECT session_id, message, classified_intent, final_intent,
+                  outcome, created_at
+           FROM intent_inference_outcomes
+           ORDER BY created_at DESC
+           LIMIT ?""",
+        (limit,),
+    )
+    return jsonify({
+        "outcomes": [
+            {
+                "session_id": r[0],
+                "message": r[1],
+                "classified_intent": r[2],
+                "final_intent": r[3],
+                "outcome": r[4],
+                "created_at": r[5],
+            }
+            for r in rows
+        ]
+    })
+
+
+@learning_bp.route("/teach/greeting", methods=["POST"])
+@require_pipeline
+def teach_greeting():
+    """Teach Genesis a new greeting through a batch of examples.
+
+    This is a convenience endpoint that creates multiple knowledge
+    items and intent patterns for greeting capability.
+
+    Expected JSON:
+    {
+        "greetings": [
+            {"text": "salaam", "language": "hinglish", "response_hint": "Waleikum assalam!"},
+            {"text": "radhe radhe", "language": "hindi", "response_hint": "Radhe radhe! Kya help chahiye?"},
+            ...
+        ]
+    }
+    """
+    data = request.get_json()
+    if not data or "greetings" not in data:
+        return jsonify({"error": "Missing required field: greetings"}), 400
+
+    taught = []
+    for g in data["greetings"]:
+        text = g.get("text", "").lower().strip()
+        lang = g.get("language", "english")
+        hint = g.get("response_hint", "")
+
+        if not text:
+            continue
+
+        # 1. Create knowledge item
+        _db.execute(
+            """INSERT INTO learned_knowledge
+               (concept, claim, source, evidence, confidence, created_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, 'VERIFIED')""",
+            (
+                "greeting",
+                f"'{text}' is a greeting. Response: {hint}",
+                "teaching",
+                json.dumps([{"text": text, "language": lang}]),
+                0.8,
+                time.time(),
+            ),
+        )
+
+        # 2. Create intent pattern
+        _db.execute(
+            """INSERT INTO learned_intent_patterns
+               (pattern_text, intent, concept, conditions, positive_examples,
+                negative_examples, confidence, status, source, created_at)
+               VALUES (?, 'greeting', 'greeting', ?, ?, ?, 0.8, 'ACTIVE', 'teaching', ?)""",
+            (
+                text,
+                json.dumps([lang]),
+                json.dumps([text]),
+                json.dumps([]),
+                time.time(),
+            ),
+        )
+
+        # 3. Create generalization
+        _db.execute(
+            """INSERT INTO learned_generalizations
+               (pattern, description, conditions, confidence, scope, created_at)
+               VALUES (?, ?, ?, 0.7, 'conversation', ?)""",
+            (
+                f"greeting:{text}",
+                f"When user says '{text}', respond with appropriate greeting. Hint: {hint}",
+                json.dumps([{"language": lang}]),
+                time.time(),
+            ),
+        )
+
+        taught.append({"text": text, "intent": "greeting", "status": "taught"})
+
+    return jsonify({
+        "status": "greetings_taught",
+        "count": len(taught),
+        "details": taught,
+    }), 201

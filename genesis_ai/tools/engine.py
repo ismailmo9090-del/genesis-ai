@@ -383,14 +383,21 @@ class ToolEngine:
     def _builtin_web_search(self, query: str = "", num_results: int = 5, **kwargs) -> list[dict]:
         if not query:
             raise ValueError("Search query is required")
-        return [
-            {
-                "title": f"Result {i+1} for '{query}'",
-                "url": f"https://example.com/result{i+1}",
-                "snippet": f"This is a simulated search result for the query: {query}",
-            }
-            for i in range(min(num_results, 5))
-        ]
+        try:
+            from genesis_ai.research.search.engine import WebSearchEngine
+            engine = WebSearchEngine()
+            raw = engine.search(query, max_results=min(num_results, 8))
+            results = []
+            for r in raw:
+                results.append({
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet,
+                    "domain": r.source_name or "",
+                })
+            return results
+        except Exception:
+            return []
 
     def _check_rate_limit(self, tool_name: str) -> bool:
         now = time.time()

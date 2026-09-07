@@ -266,15 +266,45 @@ class LearningPipeline:
         """Stage 4: EXTRACT FACTS — identify factual claims from the experience."""
         facts = []
 
-        # Extract from task/goal
-        task_concepts = representation["task_representation"]["concepts"]
-        for concept in task_concepts:
+        # PRIORITY: Extract actual claim from teaching result if available
+        result = experience.result if isinstance(experience.result, dict) else {}
+        if result.get("claim"):
+            concept = result.get("concept", "")
+            if not concept:
+                # Extract concept from task
+                task_concepts = representation["task_representation"]["concepts"]
+                concept = task_concepts[0] if task_concepts else "general"
             facts.append({
                 "concept": concept,
-                "claim": f"Task involved {concept}",
-                "confidence": 0.6,
-                "source": "experience_observation",
+                "claim": result["claim"],
+                "confidence": result.get("confidence", 0.8),
+                "source": "teaching",
             })
+        # Also extract from evidence if provided (filter out web search garbage)
+        if experience.evidence:
+            for ev in experience.evidence:
+                if isinstance(ev, dict) and ev.get("claim"):
+                    source = ev.get("source", "teaching_evidence")
+                    claim_text = ev["claim"]
+                    # Skip ALL web search results — they are raw snippets, not learned knowledge
+                    # Sources that are URLs indicate web search results
+                    if source.startswith("http") or source.startswith("www."):
+                        continue
+                    if "DuckDuckGo" in source or "search" in source.lower():
+                        continue
+                    # Use generic quality scorer instead of hardcoded patterns
+                    from genesis_ai.utils.quality import quality_score
+                    if quality_score(claim_text) < 0.4:
+                        continue
+                    facts.append({
+                        "concept": ev.get("concept", result.get("concept", "general")),
+                        "claim": claim_text,
+                        "confidence": ev.get("confidence", 0.7),
+                        "source": source,
+                    })
+
+        # Fallback: Do NOT create generic "Task involved X" entries — they are garbage
+        # If no actual claims found, return empty list
 
         # Extract from errors (failure facts)
         for error in experience.errors:
@@ -285,8 +315,11 @@ class LearningPipeline:
                 "source": "experience_error",
             })
 
-        # Extract from lessons
+        # Extract from lessons (skip raw user queries that look like reflections)
         for lesson in experience.lessons:
+            # Skip if lesson is just the raw user query
+            if lesson == experience.task:
+                continue
             facts.append({
                 "concept": "lesson",
                 "claim": lesson,
@@ -294,14 +327,7 @@ class LearningPipeline:
                 "source": "experience_lesson",
             })
 
-        # Extract from reflection
-        if experience.reflection:
-            facts.append({
-                "concept": "reflection",
-                "claim": experience.reflection[:200],
-                "confidence": 0.6,
-                "source": "experience_reflection",
-            })
+        # Do NOT store raw reflections as knowledge — they are just user queries
 
         return facts
 
@@ -536,7 +562,15 @@ class LearningPipeline:
             return -0.10  # larger negative impact for failures
 
     def _store_knowledge(self, facts: list[dict], generalizations: list[str], experience: Experience):
-        """Stage 13: STORE — persist learned knowledge."""
+        """Stage 13: STORE — persist learned knowledge and create graph concepts."""
+        # Lazy-init knowledge graph (avoids circular import at module level)
+        _knowledge_graph = None
+        try:
+            from genesis_ai.knowledge.graph.engine import KnowledgeGraph
+            _knowledge_graph = KnowledgeGraph(self.db)
+        except Exception:
+            pass
+
         for fact in facts:
             self.db.execute(
                 """INSERT INTO learned_knowledge
@@ -553,6 +587,20 @@ class LearningPipeline:
                     json.dumps([experience.experience_id]),
                 ),
             )
+
+            # Auto-create concept node in knowledge graph
+            if _knowledge_graph and fact.get("concept"):
+                try:
+                    _knowledge_graph.add_concept(
+                        name=fact["concept"],
+                        concept_type=fact.get("source", "learned"),
+                        properties={
+                            "description": fact["claim"][:200],
+                            "confidence": fact.get("confidence", 0.5),
+                        },
+                    )
+                except Exception:
+                    pass  # graph creation is best-effort
 
         for gen in generalizations:
             self.db.execute(

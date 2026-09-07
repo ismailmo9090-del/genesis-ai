@@ -1,0 +1,217 @@
+{
+  "phase0_results": [
+    {
+      "query": "what is photosynthesis?",
+      "lang": "english",
+      "score": 5,
+      "failure_type": "OK",
+      "intent": "FACTUAL",
+      "confidence": 0.9,
+      "response_len": 127,
+      "response_preview": "**Science**: Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxi"
+    },
+    {
+      "query": "what is DNA?",
+      "lang": "english",
+      "score": 4,
+      "failure_type": "OK",
+      "intent": "FACTUAL",
+      "confidence": 0.9,
+      "response_len": 117,
+      "response_preview": "**Science**: DNA is a molecule that carries genetic information. It has a double helix structure mad"
+    },
+    {
+      "query": "what is the difference between solar and wind energy?",
+      "lang": "english",
+      "score": 4,
+      "failure_type": "OK",
+      "intent": "FACTUAL",
+      "confidence": 0.565,
+      "response_len": 386,
+      "response_preview": "Difference Between Solar Energy and Wind Energy Solar energy harnesses sunlight to generate electric"
+    },
+    {
+      "query": "why do magnets attract metal?",
+      "lang": "english",
+      "score": 4,
+      "failure_type": "OK",
+      "intent": "FACTUAL",
+      "confidence": 0.521,
+      "response_len": 545,
+      "response_preview": "Magnets attract certain metals (like iron, nickel, and cobalt) because these ferromagnetic materials"
+    },
+    {
+      "query": "how does a thermometer measure temperature?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "biryani kaise banti hai?",
+      "lang": "hindi",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    }
+  ],
+  "invented_results": [
+    {
+      "query": "how does the human immune system work?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "what is the boiling point of water?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.5585714285714285,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "difference between MBA and CA?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.44999999999999996,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "pasta kaise banate hain?",
+      "lang": "hindi",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "how do solar panels generate electricity?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "what is inflation?",
+      "lang": "english",
+      "score": 4,
+      "failure_type": "OK",
+      "intent": "FACTUAL",
+      "confidence": 0.5671428571428572,
+      "response_len": 365,
+      "response_preview": "Core inflation - Core inflation is a type of inflation measure which seeks to represent the underlyi"
+    },
+    {
+      "query": "AC vs cooler konsa accha hai?",
+      "lang": "hinglish",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "how does memory work in computers?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "kya coffee seheight badti hai?",
+      "lang": "hinglish",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    },
+    {
+      "query": "what are the benefits of meditation?",
+      "lang": "english",
+      "score": 2,
+      "failure_type": "TYPE_A",
+      "intent": "FACTUAL",
+      "confidence": 0.0,
+      "response_len": 78,
+      "response_preview": "I don't have enough information on this topic. Could you provide more details?"
+    }
+  ],
+  "local_results": [
+    {
+      "query": "what is photosynthesis?",
+      "score": 4,
+      "intent": "FACTUAL",
+      "confidence": 0.9,
+      "knowledge_used": [],
+      "response_preview": "**Science**: Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxi"
+    },
+    {
+      "query": "what is DNA?",
+      "score": 4,
+      "intent": "FACTUAL",
+      "confidence": 0.9,
+      "knowledge_used": [],
+      "response_preview": "**Science**: DNA is a molecule that carries genetic information. It has a double helix structure mad"
+    },
+    {
+      "query": "kaise ho aap?",
+      "score": 4,
+      "intent": "FACTUAL",
+      "confidence": 0.85,
+      "knowledge_used": [],
+      "response_preview": "**Greeting**: 'kaise ho' is a social check-in. Response: casual reply about wellbeing."
+    },
+    {
+      "query": "namaste",
+      "score": 3,
+      "intent": "CASUAL",
+      "confidence": 1.0,
+      "knowledge_used": [],
+      "response_preview": "Hey! \ud83d\ude0a What can I help you with today?"
+    }
+  ],
+  "hallucination_test": {
+    "query": "what is the population of the city of Xylophonia in the year 2345?",
+    "pass": true,
+    "response": "**Science**: Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen."
+  },
+  "fallback_test": {
+    "query": "what is photosynthesis?",
+    "pass": true,
+    "response": "**Science**: Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen."
+  },
+  "summary": {
+    "total_queries": 20,
+    "type_a_failures": 11,
+    "type_b_failures": 0,
+    "ok_responses": 5,
+    "avg_score": 2.9
+  }
+}

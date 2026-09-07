@@ -193,6 +193,21 @@ class GenesisAI:
             entity = self._extract_entity_from_message(message)
             self._update_context(user_id, message, state.response_text, entity)
 
+            # ── PHASE 2: UPDATE CONTEXT MANAGER ──
+            try:
+                self.cognitive_engine.context_manager.update_context(
+                    user_id=user_id,
+                    message=message,
+                    response=state.response_text or "",
+                    intent=state.msg_type or "",
+                    goal=state.user_goal or "unknown",
+                    entities=state.entities or {},
+                    topic=state.active_topic or "",
+                    confidence=state.confidence_score,
+                )
+            except Exception:
+                pass
+
             # Log events for backward compatibility with UI
             valid_stages = {
                 "PERCEIVE": "USER_INPUT",
@@ -223,6 +238,12 @@ class GenesisAI:
                 "processing_time_ms": int(state.total_duration * 1000),
                 "user_id": user_id,
                 "pipeline_stages": self.event_log.get_stage_timings(session_id),
+                # Phase 2: context fields
+                "active_topic": state.active_topic or "",
+                "user_goal": state.user_goal or "",
+                "topic_changed": state.topic_changed,
+                "resolved_references": state.resolved_references or {},
+                "context_relevance": round(state.context_relevance_score, 2),
             }
 
         except Exception as e:

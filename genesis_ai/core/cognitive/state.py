@@ -107,6 +107,17 @@ class CognitiveState:
     context_entity: Optional[str] = None
     active_topic: str = ""
 
+    # ── Phase 2: Conversation State ──
+    resolved_references: dict = field(default_factory=dict)
+    user_goal: str = "unknown"
+    previous_goal: str = "unknown"
+    topic_changed: bool = False
+    context_relevant_turns: list = field(default_factory=list)
+    context_relevance_score: float = 0.0
+    clarification_needed: bool = False
+    correction_pending: bool = False
+    short_term_summary: dict = field(default_factory=dict)
+
     # ── Knowledge State ──
     known_information: list[dict] = field(default_factory=list)
     unknown_information: list[str] = field(default_factory=list)
@@ -116,6 +127,15 @@ class CognitiveState:
     relevant_memories: list[dict] = field(default_factory=list)
     relevant_experiences: list[dict] = field(default_factory=list)
     local_knowledge: list[dict] = field(default_factory=list)
+
+    # ── Learned Knowledge (from Learning → Inference Bridge) ──
+    learned_knowledge: list = field(default_factory=list)
+    learned_generalizations: list = field(default_factory=list)
+    learned_skills: list = field(default_factory=list)
+    learned_intent_patterns: list = field(default_factory=list)
+    learning_retrieval_ms: float = 0.0
+    learned_intent_source: str = ""  # "static", "learned", "learned_override"
+    learned_intent_confidence: float = 0.0
 
     # ── Reasoning ──
     assumptions: list[str] = field(default_factory=list)
