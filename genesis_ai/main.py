@@ -595,12 +595,19 @@ class GenesisAI:
     # ─── Identity & Special Responses ────────────────────────────────────────
 
     def _is_identity_question(self, message: str) -> bool:
-        """Detect identity questions using structural patterns, not exact strings."""
+        """Detect identity questions using word-boundary matching.
+        
+        CRITICAL: Uses regex word boundaries to prevent false positives:
+        - "you" should NOT match "young", "yourself", "group"
+        - "your" should NOT match "yours", "tour"
+        - "name" should NOT match "rename", "username"
+        """
         msg = message.lower().strip()
         self_references = ['genesis', 'yourself', 'tum', 'aap', 'tera', 'tumhara', 'apna', 'your', 'you']
         identity_q_words = ['who', 'what', 'kaun', 'kya', 'name', 'naam']
-        has_self_ref = any(w in msg for w in self_references)
-        has_identity_q = any(w in msg for w in identity_q_words)
+        # Use word-boundary regex to prevent substring false positives
+        has_self_ref = any(re.search(r'\b' + re.escape(w) + r'\b', msg) for w in self_references)
+        has_identity_q = any(re.search(r'\b' + re.escape(w) + r'\b', msg) for w in identity_q_words)
         has_about_self = bool(re.search(r'\b(tell|batao|samjhao)\b.{0,20}\b(yourself|apne\s+aap|tum\s+khud)\b', msg))
         return (has_self_ref and has_identity_q) or has_about_self
 

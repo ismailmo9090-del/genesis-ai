@@ -199,8 +199,8 @@ def synthesize_response(
     if not results:
         return None
 
-    # Extract clean snippets
-    snippets, titles, urls = _extract_clean_snippets(results)
+    # Extract clean snippets — pass query for relevance checking
+    snippets, titles, urls = _extract_clean_snippets(results, query)
     if not snippets:
         return None
 
@@ -561,8 +561,13 @@ def _has_self_promotion(text: str) -> bool:
     return any(re.search(p, text_lower) for p in promo_patterns)
 
 
-def _extract_clean_snippets(results: list) -> tuple:
-    """Extract and clean snippets from search results."""
+def _extract_clean_snippets(results: list, query: str = "") -> tuple:
+    """Extract and clean snippets from search results.
+    
+    Args:
+        results: List of search results
+        query: Original user query for relevance checking
+    """
     snippets, titles, urls = [], [], []
     # Keep only minimal universal junk patterns (metadata, not content)
     junk_patterns = [
@@ -601,8 +606,8 @@ def _extract_clean_snippets(results: list) -> tuple:
         if len(clean) < 30:
             continue
 
-        # Use generic quality scorer instead of hardcoded checks
-        if quality_score(clean) < 0.3:
+        # Use generic quality scorer with query for relevance checking
+        if quality_score(clean, query) < 0.3:
             continue
         snippets.append(clean)
         titles.append(r.title or "")

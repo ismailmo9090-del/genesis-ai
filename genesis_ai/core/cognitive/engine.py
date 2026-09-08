@@ -158,8 +158,12 @@ class CognitiveEngine:
             state.learned_knowledge = lr_result.knowledge or []
             state.learned_generalizations = lr_result.generalizations or []
             state.learned_skills = lr_result.skills or []
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Learning retrieval failed in perceive: {e}")
             state.learned_intent_patterns = []
+            state.learned_knowledge = []
+            state.learned_generalizations = []
+            state.learned_skills = []
         state.learning_retrieval_ms = (_time.time() - _t0) * 1000
 
         # Check greeting override from learned patterns
@@ -440,7 +444,11 @@ class CognitiveEngine:
                 )
                 state.knowledge_gaps = [g.missing_information for g in gap_analysis.gaps]
                 if gap_analysis.primary_gap:
-                    state.knowledge_status = KnowledgeStatus.UNKNOWN
+                    # DON'T override KNOWN if we have learned knowledge — the gap detector
+                    # can incorrectly override a valid knowledge status, triggering unnecessary
+                    # web research that bypasses the answer we already have
+                    if not state.learned_knowledge:
+                        state.knowledge_status = KnowledgeStatus.UNKNOWN
             except Exception as e:
                 logger.debug(f"Gap detection failed: {e}")
 
@@ -452,7 +460,19 @@ class CognitiveEngine:
 
         Delegates to DecisionOrchestrator for dynamic decision-making.
         Phase 3: Uses ResearchDecisionEngine for research decisions.
+        
+        CRITICAL GUARD: If we have learned knowledge that answers the question,
+        always prefer RECALL — don't trigger web research that will bypass it.
         """
+        # GUARD: If we have learned knowledge, always prefer RECALL
+        # This prevents the research decision engine from triggering web search
+        # when we already have the answer in our knowledge base
+        if (state.learned_knowledge 
+            and state.goal_type in (GoalType.FACTUAL, GoalType.RESEARCH, GoalType.EXPLAIN)):
+            state.selected_action = DecisionAction.RECALL
+            state.mark_stage("DECISION_MADE")
+            return state
+
         # Phase 3: Research decision — but NOT for creative/code tasks
         if (self._research_decision
             and state.knowledge_status in (
@@ -780,29 +800,28 @@ class CognitiveEngine:
     def _creative_response(self, state: CognitiveState) -> str:
         """Generate a creative/suggestion response via fallback chain.
 
-        Chain: learned skills → learned knowledge → web research → graceful fallback.
-        No hardcoded domain content.
+        Chain: learned knowledge → web research → graceful fallback.
+        No hardcoded domain content. No raw procedure steps.
         """
-        # STEP 1: Check learned skills for creative response guidance
-        if hasattr(state, 'learned_skills') and state.learned_skills:
-            for skill in state.learned_skills:
-                procedure = getattr(skill, 'procedure', [])
-                if procedure:
-                    # Use skill procedure to generate response
-                    steps_text = " → ".join(
-                        s if isinstance(s, str) else s.get("action", str(s))
-                        for s in procedure[:5]
-                    )
-                    return steps_text
-
-        # STEP 2: Check learned knowledge for suggestion-related content
+        # STEP 1: Check learned knowledge for suggestion-related content
+        # ONLY use knowledge relevant to the query
         if state.learned_knowledge:
+            query_words = set(state.cleaned_input.lower().split())
+            query_words = {w for w in query_words if len(w) >= 2}
+            
             for k in state.learned_knowledge:
                 claim = str(getattr(k, "claim", "") or "")
-                if claim and len(claim) > 20:
+                concept = str(getattr(k, "concept", "") or "")
+                if not claim or len(claim) < 20:
+                    continue
+                # Check relevance
+                claim_words = set(claim.lower().split())
+                concept_words = set(concept.lower().split())
+                overlap = query_words & (claim_words | concept_words)
+                if overlap or len(query_words) <= 2:
                     return claim
 
-        # STEP 3: Attempt web research for the creative topic
+        # STEP 2: Attempt web research for the creative topic
         if self._research_engine:
             try:
                 research_result = self._research_engine.research(
@@ -817,7 +836,12 @@ class CognitiveEngine:
             except Exception:
                 pass
 
-        # STEP 4: Graceful fallback — no hardcoded content
+        # STEP 3: Graceful fallback — no hardcoded content
+        lang = state.detected_language
+        if lang == "hindi":
+            return "मुझे इस विषय में अभी पर्याप्त जानकारी नहीं है। कृपया और विस्तार से बताइए।"
+        elif lang == "hinglish":
+            return "Mujhe is topic mein abhi enough info nahi hai. Thoda aur batao?"
         return ("I'd be happy to help with that! "
                 "Tell me more about what you're looking for — "
                 "the topic, your preferences, and I'll try to assist.")
@@ -898,6 +922,16 @@ class CognitiveEngine:
                     else:
                         state.response_text = self._fallback_response(state)
 
+                    # RESPONSE QUALITY CHECK: If composer produced poor response,
+                    # fall back to learned knowledge before giving up
+                    if not state.response_text or len(state.response_text) < 30:
+                        if state.learned_knowledge:
+                            state.response_text = self._synthesize_from_learned_knowledge(state)
+                            if state.response_text:
+                                state.knowledge_status = KnowledgeStatus.KNOWN
+                                return state
+                        state.response_text = self._fallback_response(state)
+
                     # Record research for history
                     if self._research_decision:
                         self._research_decision.record_research(
@@ -942,8 +976,22 @@ class CognitiveEngine:
                 state.detected_language,
                 state.goal_type.value.upper(),
             )
+            # RESPONSE QUALITY CHECK: If synthesis produced poor response,
+            # fall back to learned knowledge before giving up
+            if not state.response_text or len(state.response_text) < 30:
+                if state.learned_knowledge:
+                    state.response_text = self._synthesize_from_learned_knowledge(state)
+                    if state.response_text:
+                        state.knowledge_status = KnowledgeStatus.KNOWN
+                        return state
         else:
             state.knowledge_status = KnowledgeStatus.UNKNOWN
+            # FALLBACK: Try learned knowledge before generic fallback
+            if state.learned_knowledge:
+                state.response_text = self._synthesize_from_learned_knowledge(state)
+                if state.response_text:
+                    state.knowledge_status = KnowledgeStatus.KNOWN
+                    return state
             state.response_text = self._fallback_response(state)
 
         return state
@@ -1111,13 +1159,20 @@ class CognitiveEngine:
         return "english"
 
     def _is_identity_question(self, msg: str) -> bool:
-        """Detect identity questions using structural patterns."""
+        """Detect identity questions using word-boundary matching.
+        
+        CRITICAL: Uses regex word boundaries to prevent false positives:
+        - "you" should NOT match "young", "yourself", "group"
+        - "your" should NOT match "yours", "tour"
+        - "name" should NOT match "rename", "username"
+        """
         msg_lower = msg.lower().strip()
         self_refs = ["genesis", "yourself", "tum", "aap", "tera", "tumhara",
                       "apna", "your", "you"]
         id_q_words = ["who", "what", "kaun", "kya", "name", "naam"]
-        has_self = any(w in msg_lower for w in self_refs)
-        has_q = any(w in msg_lower for w in id_q_words)
+        # Use word-boundary regex to prevent substring false positives
+        has_self = any(re.search(r'\b' + re.escape(w) + r'\b', msg_lower) for w in self_refs)
+        has_q = any(re.search(r'\b' + re.escape(w) + r'\b', msg_lower) for w in id_q_words)
         return has_self and has_q
 
     def _contextual_intent_override(self, state: CognitiveState) -> GoalType:
@@ -1367,35 +1422,62 @@ class CognitiveEngine:
         return False
 
     def _synthesize_from_learned_knowledge(self, state: CognitiveState) -> str:
-        """Synthesize a response from learned knowledge."""
+        """Synthesize a response from learned knowledge.
+        
+        CRITICAL: Must check relevance to the user's query — never return
+        unrelated knowledge just because it has high confidence.
+        """
         if not state.learned_knowledge:
             return ""
 
-        # Pick the highest-confidence learned knowledge, excluding generic observation claims
+        # Filter: exclude generic observation claims and low-confidence entries
         useful = [k for k in state.learned_knowledge
                   if not k.claim.startswith("Task involved ")
-                  and k.confidence >= 0.5]
+                  and k.confidence >= 0.3]
         if not useful:
-            # Fall back to any learned knowledge
-            useful = state.learned_knowledge
+            return ""
 
-        best = max(useful, key=lambda k: k.confidence)
+        # RELEVANCE GATE: Only use knowledge that is relevant to the query
+        # This prevents unrelated high-confidence knowledge from becoming the answer
+        query_words = set(state.cleaned_input.lower().split())
+        # Remove very short words
+        query_words = {w for w in query_words if len(w) >= 2}
+        
+        relevant = []
+        for k in useful:
+            # Check if knowledge is relevant to the query
+            claim_words = set(k.claim.lower().split())
+            concept_words = set(k.concept.lower().split())
+            all_knowledge_words = claim_words | concept_words
+            overlap = query_words & all_knowledge_words
+            
+            # Calculate relevance score
+            if not overlap:
+                relevance = 0.0
+            elif len(query_words) <= 3:
+                # Short query: single word match is enough
+                relevance = 0.5
+            else:
+                # Longer query: need meaningful overlap
+                relevance = len(overlap) / min(len(query_words), 5)
+            
+            # Store relevance on the knowledge object for ranking
+            k._relevance = relevance
+            if relevance >= 0.2:
+                relevant.append(k)
+        
+        if not relevant:
+            # If nothing is relevant, don't return unrelated knowledge
+            return ""
 
-        # Build response from the claim
+        # Sort by combined confidence * relevance score
+        best = max(relevant, key=lambda k: k.confidence * getattr(k, '_relevance', 0.5))
+
         claim = best.claim
         concept = best.concept
         lang = state.detected_language
 
-        # If the claim is a generic observation, don't use it as a response
-        if claim.startswith("Task involved "):
-            return ""
-
-        if lang == "hindi":
-            return f"**{concept.title()}**: {claim}"
-        elif lang == "hinglish":
-            return f"**{concept.title()}**: {claim}"
-        else:
-            return f"**{concept.title()}**: {claim}"
+        return f"**{concept.title()}**: {claim}"
 
     def _synthesize_from_learned_skills(self, state: CognitiveState) -> str:
         """Synthesize a response from learned skills/procedures."""

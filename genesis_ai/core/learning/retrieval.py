@@ -261,17 +261,32 @@ class LearningRetrieval:
 
         results = []
         for row in rows:
+            claim = row[2] or ""
+            concept = row[1] or ""
+            source = row[5] or ""
+            
+            # GARBAGE FILTER: Reject known bad patterns that pollute responses
+            if claim.startswith("Task involved "):
+                continue
+            if concept.lower() == "general" and len(claim) < 50:
+                continue
+            # Reject web-sourced entries with URL-like sources
+            if source.startswith("http") or source.startswith("www."):
+                continue
+            if "duckduckgo" in source.lower() or "web_research" in source.lower():
+                continue
+            
             # Calculate relevance score
             relevance = self._calculate_relevance(
-                query, row[1], row[2]  # query, concept, claim
+                query, concept, claim
             )
             results.append(RetrievedKnowledge(
                 id=row[0],
-                concept=row[1],
-                claim=row[2],
+                concept=concept,
+                claim=claim,
                 confidence=row[3],
                 status=row[4],
-                source=row[5],
+                source=source,
                 created_at=row[6],
                 use_count=row[7],
                 freshness=row[8],

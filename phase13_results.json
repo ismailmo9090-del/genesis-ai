@@ -1,0 +1,119 @@
+[
+  {
+    "query": "What is the capital of Bhutan?",
+    "expected": "Should use learned knowledge",
+    "response": "**Bhutan Capital**: Thimphu is the capital of Bhutan",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.9,
+    "status": "OK"
+  },
+  {
+    "query": "What is quantum entanglement?",
+    "expected": "Should attempt research or use knowledge",
+    "response": "**Quantum Entanglement**: Quantum entanglement is a phenomenon where particles become correlated and measuring one insta",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.9,
+    "status": "OK"
+  },
+  {
+    "query": "What is a young star?",
+    "expected": "Should NOT be IDENTITY (young contains 'you')",
+    "response": "I don't have enough information on this topic. Could you provide more details?",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.5585714285714285,
+    "status": "OK"
+  },
+  {
+    "query": "What are tumour cells?",
+    "expected": "Should NOT be IDENTITY (tumour contains 'tum')",
+    "response": "Cancer cells differ from normal cells in a number of ways. Cancer cell Cancer cells are cells that divide continually, f",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.5692857142857144,
+    "status": "OK"
+  },
+  {
+    "query": "Who is the best username?",
+    "expected": "Should NOT be IDENTITY (username contains 'name')",
+    "response": "If you're struggling to find the right username, fear not. We've compiled a list of the top 20 best usernames of all tim",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.512,
+    "status": "OK"
+  },
+  {
+    "query": "Who are you?",
+    "expected": "Should be IDENTITY",
+    "response": "For the title track from the album, see Who Are You (The Who song) . Who Are You Studio album by the Who Released 18 Aug",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.5757142857142857,
+    "status": "OK"
+  },
+  {
+    "query": "What is your name?",
+    "expected": "Should be IDENTITY",
+    "response": "Your Name Theatrical release poster Japanese name Kanji \u541b\u306e\u540d\u306f\u3002 Transcriptions Revised Hepburn Kimi no Na wa Directed by M",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.562857142857143,
+    "status": "OK"
+  },
+  {
+    "query": "hello",
+    "expected": "Should be CASUAL greeting",
+    "response": "Hey! \ud83d\ude0a What can I help you with today?",
+    "intent": "CASUAL",
+    "goal": "",
+    "confidence": 1.0,
+    "status": "OK"
+  },
+  {
+    "query": "how are you?",
+    "expected": "Should be CASUAL greeting",
+    "response": "\"How Are You\" is the seventh track on the album, Think Visual, released by the Kinks in 1986. Why It Matters When you ca",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.5757142857142857,
+    "status": "OK"
+  },
+  {
+    "query": "what is photosynthesis?",
+    "expected": "Should answer from knowledge or research",
+    "response": "**Science**: Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and ",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.9,
+    "status": "OK"
+  },
+  {
+    "query": "explain gravity",
+    "expected": "Should answer from knowledge or research",
+    "response": "**Science**: Gravity is the force of attraction between objects with mass. It keeps planets in orbit and causes objects ",
+    "intent": "FACTUAL",
+    "goal": "",
+    "confidence": 0.9,
+    "status": "OK"
+  },
+  {
+    "query": "write a poem about rain",
+    "expected": "Should handle creatively",
+    "response": "I'd be happy to help with that! Tell me more about what you're looking for \u2014 the topic, your preferences, and I'll try t",
+    "intent": "CREATIVE",
+    "goal": "",
+    "confidence": 0.85,
+    "status": "OK"
+  },
+  {
+    "query": "write Python code to reverse a string",
+    "expected": "Should handle code",
+    "response": "**Coding**: In Python, reverse a string using slicing: reversed_str = original_str[::-1]. Or use reversed() and join: '.",
+    "intent": "CODE",
+    "goal": "",
+    "confidence": 0.85,
+    "status": "OK"
+  }
+]
