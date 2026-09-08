@@ -1,6 +1,7 @@
 """Code generation engine — orchestrates the full code generation pipeline."""
 from __future__ import annotations
 
+import os
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -15,6 +16,27 @@ from genesis_ai.core.code.regeneration import RegenerationEngine, RegenerationRe
 from genesis_ai.core.code.generation_provider import (
     GenerationProvider, LocalProvider, HybridProvider, GenerationResult
 )
+
+KNOWLEDGE_PROVIDER_MODES = ("internal", "network", "hybrid")
+
+
+def _build_knowledge_provider(mode: Optional[str] = None) -> KnowledgeProvider:
+    if mode is None:
+        mode = os.environ.get("GENESIS_KNOWLEDGE_MODE", "hybrid")
+    mode = mode.lower()
+    if mode not in KNOWLEDGE_PROVIDER_MODES:
+        mode = "hybrid"
+
+    if mode == "internal":
+        return InternalKnowledgeProvider()
+
+    from genesis_ai.core.code.genesis_knowledge_provider import GenesisKnowledgeProvider
+    network_url = os.environ.get("GENESIS_KNOWLEDGE_URL", "http://127.0.0.1:8000")
+    gp = GenesisKnowledgeProvider(network_url=network_url)
+
+    if mode == "network":
+        return gp
+    return gp
 
 
 @dataclass
@@ -33,6 +55,9 @@ class GenerationResponse:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
+    knowledge_items_used: int = 0
+    knowledge_types: list[str] = field(default_factory=list)
+    knowledge_provider: str = "internal"
 
     def to_dict(self) -> dict:
         result = {
@@ -45,6 +70,9 @@ class GenerationResponse:
             "provider": self.provider,
             "warnings": self.warnings,
             "errors": self.errors,
+            "knowledge_provider": self.knowledge_provider,
+            "knowledge_items_used": self.knowledge_items_used,
+            "knowledge_types": self.knowledge_types,
         }
         if self.plan:
             result["plan"] = {
@@ -118,9 +146,10 @@ class CodeGenerationEngine:
     """Main orchestrator for code generation pipeline."""
 
     def __init__(self, provider: Optional[GenerationProvider] = None,
-                 knowledge_provider: Optional[KnowledgeProvider] = None):
+                 knowledge_provider: Optional[KnowledgeProvider] = None,
+                 knowledge_mode: Optional[str] = None):
         self._provider = provider or LocalProvider()
-        self._kp = knowledge_provider or InternalKnowledgeProvider()
+        self._kp = knowledge_provider or _build_knowledge_provider(knowledge_mode)
         self._planner = ProjectPlanner()
         self._validator = CodeValidator()
         self._generator = CodeGenerator(self._kp)
@@ -171,10 +200,20 @@ class CodeGenerationEngine:
             language=request.language or "unknown",
         )
 
+        kp_name = type(self._kp).__name__
+        response.knowledge_provider = "network" if "Genesis" in kp_name else "internal"
+
         try:
             spec = self._planner.plan(request)
             response.plan = spec
             response.project_type = spec.request.project_type or "generic"
+
+            query = f"{request.raw_input} {request.language or ''} {request.framework or ''}".strip()
+            knowledge_items = self._kp.search_knowledge(query, language=request.language, limit=10)
+            response.knowledge_items_used = len(knowledge_items)
+            response.knowledge_types = list(set(
+                type(k).__name__ for k in knowledge_items
+            ))
 
             gen_result = self._provider.generate_from_request(request)
             response.provider = self._provider.name
