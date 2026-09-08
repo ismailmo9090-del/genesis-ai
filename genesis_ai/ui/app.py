@@ -31,6 +31,10 @@ def create_app(genesis_instance: GenesisAI) -> Flask:
     from genesis_ai.api.inference import init_inference_api
     init_inference_api(app, genesis, genesis.db)
 
+    # Initialize Code Generation API
+    from genesis_ai.api.code_api import init_code_api
+    init_code_api(app, genesis)
+
     return app
 
 

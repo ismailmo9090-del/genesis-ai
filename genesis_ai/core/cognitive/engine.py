@@ -738,18 +738,38 @@ class CognitiveEngine:
             state.confidence_score = 1.0
             return state
 
-        # For code: try local generation
+        # For code: try legacy template generator first, then new engine
         if state.goal_type == GoalType.CODE:
+            # First try the legacy template generator for simple cases
             from genesis_ai.core.code.generator import CodeGenerator
             gen = CodeGenerator()
             code = gen.generate(state.raw_input)
             if code:
-                lang_name = state.entities.get("languages", ["python"])[0]
                 topic = state.raw_input.title()
                 state.response_text = f"Here is the code for {topic}:\n\n```\n{code}\n```"
                 state.msg_type = "CODE"
                 state.confidence_score = 0.9
                 return state
+            # If no template match, use the full CodeGenerationEngine pipeline
+            try:
+                from genesis_ai.core.code.engine import CodeGenerationEngine
+                engine = CodeGenerationEngine()
+                gen_response = engine.generate(state.raw_input)
+                if gen_response.success and gen_response.files:
+                    parts = []
+                    for path in sorted(gen_response.files.keys()):
+                        content = gen_response.files[path]
+                        ext = path.rsplit(".", 1)[-1] if "." in path else ""
+                        lang_map = {"py": "python", "js": "javascript", "ts": "typescript",
+                                    "html": "html", "css": "css", "json": "json", "sql": "sql"}
+                        lang_tag = lang_map.get(ext, "")
+                        parts.append(f"# === {path} ===\n```{lang_tag}\n{content}\n```")
+                    state.response_text = f"Here is the generated code:\n\n" + "\n\n".join(parts)
+                    state.msg_type = "CODE"
+                    state.confidence_score = 0.9
+                    return state
+            except Exception:
+                pass
             # If no code generated, try learned knowledge
             if state.learned_knowledge:
                 state.response_text = self._synthesize_from_learned_knowledge(state)
