@@ -148,7 +148,7 @@ class CodeGenerationEngine:
     def __init__(self, provider: Optional[GenerationProvider] = None,
                  knowledge_provider: Optional[KnowledgeProvider] = None,
                  knowledge_mode: Optional[str] = None):
-        self._provider = provider or LocalProvider()
+        self._provider = provider or HybridProvider()
         self._kp = knowledge_provider or _build_knowledge_provider(knowledge_mode)
         self._planner = ProjectPlanner()
         self._validator = CodeValidator()

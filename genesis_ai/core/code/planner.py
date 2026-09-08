@@ -243,7 +243,8 @@ class ProjectPlanner:
                 files=["src/main.py" if lang == "python" else "src/index.js"],
             ),
         ]
-        if "auth" in req.features or "authentication" in req.features or "security" in req.constraints:
+        has_auth = any("auth" in f for f in req.features) or "security" in req.constraints
+        if has_auth:
             comps.insert(1, ComponentSpec(
                 name="authentication",
                 purpose="Authentication and authorization middleware",

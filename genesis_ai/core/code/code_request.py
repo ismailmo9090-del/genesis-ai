@@ -60,8 +60,6 @@ class CodeRequest:
 
     @staticmethod
     def _detect_request_type(msg: str) -> RequestType:
-        if any(w in msg for w in ("fix", "debug", "error", "bug", "broken", "doesn't work")):
-            return RequestType.DEBUG
         if any(w in msg for w in ("optimize", "faster", "performance", "speed up")):
             return RequestType.OPTIMIZE
         if any(w in msg for w in ("refactor", "restructure", "clean up", "reorganize")):
@@ -72,6 +70,10 @@ class CodeRequest:
             return RequestType.MIGRATE
         if any(w in msg for w in ("modify", "change", "update", "alter")):
             return RequestType.MODIFY
+        if any(phrase in msg for phrase in ("fix this", "debug this", "there's a bug", "broken code", "doesn't work")):
+            return RequestType.DEBUG
+        if "error" in msg and not any(phrase in msg for phrase in ("error handling", "error handling", "error management")):
+            return RequestType.DEBUG
         return RequestType.CREATE
 
     @staticmethod
